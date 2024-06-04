@@ -211,5 +211,10 @@ module agc_design(
                      .agc_scale_ce_i( agc_scale_load_aclk ),
                      .agc_offset_ce_i(agc_offset_load_aclk),
                      .agc_apply_i(agc_apply_aclk));
+
+    assign buf0_tdata = pack5( agc_out );
+    assign buf0_tvalid = 1'b1;
+    assign dac0_tdata = pack5( agc_out );
+    assign dac0_tvalid = 1'b1;
     
 endmodule
