@@ -86,11 +86,24 @@ module saturate_and_scale #(parameter LSB=4)(
             rounded_output[0] <= in_i[LSB-1] | base_output[0];
             
             // abs needs to flip bits and add 1 if negative.
-            if (in_i[47]) begin
-                abs <= {~base_output[3:1],~(in_i[LSB-1]|base_output[0])} + 1;
-            end else begin
-                abs <= {base_output[3:1],in_i[LSB-1]|base_output[0]};
-            end
+            // NO, IDIOT
+            // This is now the SYMMETRIC REPRESENTATION, which means the abs
+            // is JUST A CONDITIONAL BIT FLIP
+            // Consider 3 bit signed:
+            // -4 => 3  3 => 3
+            // -3 => 2  2 => 2
+            // -2 => 1  1 => 1
+            // -1 => 0  0 => 0
+            // this is just "flip the bottom bits if negative."
+            if (in_i[47])
+                abs <= ~{base_output[3:1],(in_i[LSB-1] | base_output[0])};
+            else
+                abs <= { base_output[3:1], in_i[LSB-1] | base_output[0] };
+//            if (in_i[47]) begin
+//                abs <= {~base_output[3:1],~(in_i[LSB-1]|base_output[0])} + 1;
+//            end else begin
+//                abs <= {base_output[3:1],in_i[LSB-1]|base_output[0]};
+//            end
         end
     end
     assign abs_o = abs;

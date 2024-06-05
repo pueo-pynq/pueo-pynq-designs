@@ -207,14 +207,17 @@ module agc_design(
                      .agc_ce_i(agc_ce),
                      .agc_rst_i(agc_reset_aclk),
                      .agc_scale_i( agc_scale ),
-                     .agc_offset_i( agc_offset ),
+                     .offset_i( agc_offset ),
                      .agc_scale_ce_i( agc_scale_load_aclk ),
                      .agc_offset_ce_i(agc_offset_load_aclk),
                      .agc_apply_i(agc_apply_aclk));
 
     assign buf0_tdata = pack5( agc_out );
     assign buf0_tvalid = 1'b1;
+    assign buf1_tdata = adc0_tdata;
+    assign buf1_tvalid = 1'b1;
     assign dac0_tdata = pack5( agc_out );
     assign dac0_tvalid = 1'b1;
-    
+    assign dac1_tdata = adc0_tdata;
+    assign dac1_tvalid = 1'b1;    
 endmodule
