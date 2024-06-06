@@ -220,4 +220,10 @@ module agc_design(
     assign dac0_tvalid = 1'b1;
     assign dac1_tdata = adc0_tdata;
     assign dac1_tvalid = 1'b1;    
+    
+    assign wb_ack_o = (state == ACK);
+    assign wb_dat_o = register_hold;
+    assign wb_err_o = 1'b0;
+    assign wb_rty_o = 1'b0;
+
 endmodule
