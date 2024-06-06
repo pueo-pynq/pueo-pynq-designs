@@ -6,7 +6,7 @@
 // The measurement and parameter stuff is elsewhere, since they're common.
 // The LFSR portion isn't common because it's so small that it's easier
 // to just duplicate it locally.
-module agc_core #(parameter NBITS=12, 
+    module agc_core #(parameter NBITS=12, 
                   parameter NSAMP=8,
                   parameter OBITS=5,
                   parameter SQ_BITS=24,
@@ -32,7 +32,7 @@ module agc_core #(parameter NBITS=12,
         // Gain scale
         input [16:0] agc_scale_i,
         // Offset
-        input [7:0] offset_i,
+        input [15:0] offset_i,
         // Loads the new scale
         input agc_scale_ce_i,
         // Loads the new offset
@@ -59,7 +59,7 @@ module agc_core #(parameter NBITS=12,
              .ce_i(agc_ce_i),
              .rst_i(agc_tick_i),
              .gt_i(gt_thresh),
-             .lt_i(gt_thresh),
+             .lt_i(lt_thresh),
              .gt_sum_o(gt_accum_o),
              .lt_sum_o(lt_accum_o));
     
@@ -94,7 +94,7 @@ module agc_core #(parameter NBITS=12,
             agc_dsp #(.CLKTYPE(CLKTYPE)) u_dsp( .clk_i(clk_i),
                            .dat_i(rf_dat_i[NBITS*i +: NBITS]),
                            .scale_i(agc_scale_i),
-                           .offset_i(agc_offset_i),
+                           .offset_i(offset_i),
                            .ce_scale_i(agc_scale_ce_i),
                            .ce_offset_i(agc_offset_ce_i),
                            .apply_i(agc_apply_i),

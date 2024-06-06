@@ -34,10 +34,15 @@
 // then you're really putting in NEGATIVE 1
 // AND YOU NEED TO DIVIDE BY 128, NOT 256
 // I PROBABLY ALSO HAVE TO INCREASE THE RANGE OF THE OFFSET JUST A THOUGHT
+//
+// NO WAY WILL Q0.8 WORK
+// GO CRAZY: Q8.8
+// THIS MEANS Q_SUM WILL BE 8
+// AND DESIRED LSB WILL BE 8 + 12 + 5 - 2 = 23
 module agc_dsp #(parameter Q_SCALE = 12,
                  parameter DAT_BITS = 12,
                  parameter Q_DAT = 0,
-                 parameter OFFSET_BITS=12,
+                 parameter OFFSET_BITS=16,
                  parameter Q_OFFSET = 8,
                  parameter NBITS = 5,
                  parameter SCALE_IN = 5,
@@ -58,18 +63,13 @@ module agc_dsp #(parameter Q_SCALE = 12,
         output lt_o    );
 
     // LOTS OF FIXED POINT TRACKING
+
+    // We need to figure out which of the DAT or OFFSET have more fractional bits, and we choose the larger.
     localparam Q_SUM = (Q_DAT > Q_OFFSET) ? Q_DAT : Q_OFFSET;
+    // SCALE_IN represents the power of 2 close to the RMS of the input: it's "nominal input scale" in RMS scaling
+    // We then back up NFRAC_OUT bits to pick up the fraction.
     localparam DESIRED_LSB = Q_SUM + Q_SCALE + SCALE_IN - NFRAC_OUT;
         
-    // we want scale_i=4096 to be 1 (scale = scale_i/2^12)
-    // and offset_i = 128 (offset = offset_i/2^8)
-    // note that offset can only reach up to +/-16...? so hopefully
-    // that should be enough...? I HOPE??
-    // if input RMS is 32, then output RMS would be 32*256*4096
-    // = 33,554,432 = 2^25
-    // This would put the LSB at 2^23.
-    // corresponding to bits [27:23].
-
     // mask off everything except the unsaturated bits
     // Saturation mask actually needs to be ONE LESS than the number of output bits
     // You are checking if the MSB (sign bit) in your output matches *all the other* bits above it
@@ -91,7 +91,9 @@ module agc_dsp #(parameter Q_SCALE = 12,
                           dat_i, 
                           {DAT_PADDING{1'b0}}
                         } : { {DAT_SIGNEXT{dat_i[DAT_BITS-1]}}, dat_i };
-    // this is Q4.8, so sign extend by 15
+    // this is Q8.8
+    // OFF_PADDING will be 8-8 = 0
+    // and OFF_SIGNEXT = 27-16- (8-8) = 11
     localparam OFF_PADDING = (Q_SUM-Q_OFFSET);
     localparam OFF_SIGNEXT = 27 - OFFSET_BITS - (Q_SUM - Q_OFFSET);
     wire [26:0] dsp_a = (OFF_PADDING > 0) ? { {OFF_SIGNEXT{offset_i[OFFSET_BITS-1]}},

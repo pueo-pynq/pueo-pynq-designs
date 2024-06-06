@@ -42,9 +42,10 @@ module agc_design(
     // agc scale
     (* CUSTOM_CC_SRC = WBCLKTYPE *)
     reg [16:0] agc_scale = {17{1'b0}};
-    // offset
+    // offset. The offset needs to be way bigger than Q0.8.
+    // Try Q8.8 first.
     (* CUSTOM_CC_SRC = WBCLKTYPE *)
-    reg [7:0] agc_offset = {8{1'b0}};
+    reg [15:0] agc_offset = {16{1'b0}};
     // load agc scale
     reg agc_scale_load = 0;
     wire agc_scale_load_aclk;
@@ -139,7 +140,8 @@ module agc_design(
         endcase
         
         // WHATEVER
-        if (state == READ) register_hold <= register_data[wb_adr_i[3:2]];
+        // these are ** 8 ** REGISTERS
+        if (state == READ) register_hold <= register_data[wb_adr_i[4:2]];
         // SO DUMB
         if (state == WRITE) begin
             if (`ADDR_MATCH(wb_adr_i, 22'h10, AGC_MASK)) begin
