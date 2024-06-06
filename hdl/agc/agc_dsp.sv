@@ -35,7 +35,8 @@ module agc_dsp #(parameter Q_SCALE = 12,
                  parameter Q_OFFSET = 8,
                  parameter NBITS = 5,
                  parameter SCALE_IN = 5,
-                 parameter NFRAC_OUT = 2
+                 parameter NFRAC_OUT = 2,
+                 parameter CLKTYPE = "NONE"
                  )(
         input clk_i,
         input [DAT_BITS-1:0] dat_i,
@@ -99,6 +100,7 @@ module agc_dsp #(parameter Q_SCALE = 12,
     wire [47:0] dsp_p;
     wire patternmatch;
     wire patternbmatch;
+    (* CUSTOM_CC_DST = CLKTYPE *)
     DSP48E2 #(.AREG(2),.BREG(2),`C_UNUSED_ATTRS,.DREG(1),.ADREG(1),.MREG(1),
               .PREG(1),.USE_PATTERN_DETECT("PATDET"),
               .SEL_MASK("MASK"),

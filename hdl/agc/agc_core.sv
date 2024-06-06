@@ -90,8 +90,8 @@ module agc_core #(parameter NBITS=12,
     
     generate
         genvar i;
-        for (i=0;i<NSAMP;i=i+1) begin : DSPS
-            agc_dsp u_dsp( .clk_i(clk_i),
+        for (i=0;i<NSAMP;i=i+1) begin : DSPS        
+            agc_dsp #(.CLKTYPE(CLKTYPE)) u_dsp( .clk_i(clk_i),
                            .dat_i(rf_dat_i[NBITS*i +: NBITS]),
                            .scale_i(agc_scale_i),
                            .offset_i(agc_offset_i),
