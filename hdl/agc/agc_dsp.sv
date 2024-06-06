@@ -28,6 +28,12 @@
 // A = offset
 // D = data
 //
+// NOTE NOTE NOTE NOTE NOTE:
+// Offset is 8-bit FIXED POINT SIGNED
+// so if you put in "128" = 10000000
+// then you're really putting in NEGATIVE 1
+// AND YOU NEED TO DIVIDE BY 128, NOT 256
+// I PROBABLY ALSO HAVE TO INCREASE THE RANGE OF THE OFFSET JUST A THOUGHT
 module agc_dsp #(parameter Q_SCALE = 12,
                  parameter DAT_BITS = 12,
                  parameter Q_DAT = 0,
@@ -99,6 +105,12 @@ module agc_dsp #(parameter Q_SCALE = 12,
     // its position also doesn't matter, it just affects the output locations
     wire [17:0] dsp_b = {1'b0, scale_i};
     
+    // our opmodes are 00, Z_OPMODE_0, XY_OPMODE_M     
+    wire [8:0] dsp_opmode = { 2'b00, `Z_OPMODE_0, `XY_OPMODE_M };
+    // our ALUMODE is ALUMODE_SUM_ZXYCIN
+    wire [3:0] dsp_alumode = `ALUMODE_SUM_ZXYCIN;
+    // our INMODE is (A2+D)*B2 which is 0 0 1 0 0
+    wire [4:0] dsp_inmode = 5'b00100;
     wire [47:0] dsp_p;
     wire patternmatch;
     wire patternbmatch;
@@ -125,6 +137,11 @@ module agc_dsp #(parameter Q_SCALE = 12,
                     .CEAD(1'b1),
                     .CEM(1'b1),
                     .CEP(1'b1),
+                    
+                    .INMODE(dsp_inmode),
+                    .ALUMODE(dsp_alumode),
+                    .OPMODE(dsp_opmode),
+                    
                     .PATTERNDETECT(patternmatch),
                     .PATTERNBDETECT(patternbmatch),
                     .P(dsp_p));              
