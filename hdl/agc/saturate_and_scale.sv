@@ -59,7 +59,9 @@ module saturate_and_scale #(parameter LSB=4)(
         // large fanout. We therefore branch gt/lt regs from
         // the AGC DSP itself.
         if (!in_bounds) begin
-            rounded_output[3:0] <= {4{in_i[47]}};
+            // We want to SATURATE so the BOTTOM 4 BITS ARE ALWAYS THE INVERSION
+            // THE TOP (SIGN) BIT
+            rounded_output[3:0] <= {4{!in_i[47]}};
             // If we're overflowing, we set one of these two
             // no matter what.
             gt_reg <= !in_i[47];
