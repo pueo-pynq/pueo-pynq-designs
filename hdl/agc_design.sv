@@ -32,11 +32,11 @@ module agc_design(
     
     // Capture of square, gt, lt accumulators. These are wb-clk land
     // AGC tick is delayed for capture.
-    (* CUSTOM_CC_SRC = CLKTYPE *)
+    (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [20:0] gt_accum_reg = {21{1'b0}};
-    (* CUSTOM_CC_SRC = CLKTYPE *)
+    (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [20:0] lt_accum_reg = {21{1'b0}};
-    (* CUSTOM_CC_SRC = CLKTYPE *)
+    (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [23:0] sq_accum_reg = {24{1'b0}};
     
     // agc scale
