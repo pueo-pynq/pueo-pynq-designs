@@ -65,7 +65,9 @@ module agc_dsp #(parameter Q_SCALE = 12,
     // corresponding to bits [27:23].
 
     // mask off everything except the unsaturated bits
-    localparam [47:0] SATURATION_MASK = { {(48-DESIRED_LSB-NBITS){1'b0}}, {(DESIRED_LSB+NBITS){1'b1}}};
+    // Saturation mask actually needs to be ONE LESS than the number of output bits
+    // You are checking if the MSB (sign bit) in your output matches *all the other* bits above it
+    localparam [47:0] SATURATION_MASK = { {(48-DESIRED_LSB-NBITS-1){1'b0}}, {(DESIRED_LSB+NBITS-1){1'b1}}};
     // saturation occurs if the pattern is NOT either all zeros or all ones
     localparam [47:0] SATURATION_PATTERN = {48{1'b0}};
     
