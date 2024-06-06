@@ -66,8 +66,8 @@ module agc_design(
     
     reg req_agc_tick = 0;
     wire agc_tick_aclk;
-    flag_sync u_tick_flag(.in_clkA(agc_tick_load),.clkA(wb_clk_i),
-                          .out_clkB(agc_tick_load_aclk),.clkB(aclk));
+    flag_sync u_tick_flag(.in_clkA(req_agc_tick),.clkA(wb_clk_i),
+                          .out_clkB(agc_tick_aclk),.clkB(aclk));
 
 
     reg agc_done = 0;
@@ -165,7 +165,7 @@ module agc_design(
     endfunction
     // PACK5 is 5 -> 128 - WE SCALE UP BY 16 FOR VISIBILITY!!
     function [127:0] pack5;
-        input [95:0] data_in;
+        input [39:0] data_in;
         integer i;
         begin
             for (i=0;i<8;i=i+1) begin
@@ -195,7 +195,7 @@ module agc_design(
                         .count_i(agc_ce),
                         .tcount_reached_o(agc_time_done));
     // SCREW WITH ONE GUY ONLY
-    wire [59:0] agc_out;
+    wire [39:0] agc_out;
     agc_core #(.CLKTYPE(CLKTYPE)) u_agc0( .clk_i(aclk),
                      .rf_dat_i(unpack(adc0_tdata)),
                      .rf_dat_o(agc_out),
