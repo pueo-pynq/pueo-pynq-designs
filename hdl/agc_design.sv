@@ -98,7 +98,7 @@ module agc_design(
     assign register_data[2] = { {11{1'b0}},gt_accum_reg };
     assign register_data[3] = { {11{1'b0}},lt_accum_reg };
     assign register_data[4] = { {15{1'b0}},agc_scale };
-    assign register_data[5] = { {8{1'b0}},agc_offset };
+    assign register_data[5] = { {16{1'b0}},agc_offset };
     assign register_data[6] = register_data[2]; // shadow to ease decode
     assign register_data[7] = register_data[3]; // shadow to ease decode
 
@@ -150,7 +150,8 @@ module agc_design(
                 if (wb_sel_i[2]) agc_scale[16] <= wb_dat_i[16];
             end
             if (`ADDR_MATCH(wb_adr_i, 22'h14, AGC_MASK)) begin
-                if (wb_sel_i[0]) agc_offset <= wb_dat_i[7:0];
+                if (wb_sel_i[0]) agc_offset[7:0] <= wb_dat_i[7:0];
+                if (wb_sel_i[1]) agc_offset[15:8] <= wb_dat_i[15:8];
             end                
         end
     end
