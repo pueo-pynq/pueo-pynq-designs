@@ -9,7 +9,7 @@
     module agc_core #(parameter NBITS=12, 
                   parameter NSAMP=8,
                   parameter OBITS=5,
-                  parameter SQ_BITS=24,
+                  parameter SQ_BITS=25,
                   parameter PR_BITS=21,
                   parameter CLKTYPE="NONE")(
         input clk_i,
@@ -50,7 +50,7 @@
     // absolute value for RMS *after* mux
     wire [OBITS-2:0] abs_val_mux;
     // Reset value for square accumulator
-    localparam [23:0] SQ_OFFSET = 16384;
+    localparam [SQ_BITS-1:0] SQ_OFFSET = 16384;
     
     // probit accumulator
     probit_accumulator #(.NBITS(PR_BITS),
@@ -79,14 +79,16 @@
                        .in_i(abs_vals),
                        .out_o(abs_val_mux));                     
     // square accumulator             
-    square_5bit_accumulator #(.NBITS(SQ_BITS),
+    square_5bit_accumulator #(.NBITS(SQ_BITS-1),
                               .RESET_VALUE(SQ_OFFSET),
                               .CLKTYPE(CLKTYPE))
        u_sq(.clk_i(clk_i),
             .in_i(abs_val_mux),
             .ce_i(agc_ce_i),
             .rst_i(agc_tick_i),
-            .accum_o(sq_accum_o));                                      
+            .accum_o(sq_accum_o[SQ_BITS-1:1]));                                      
+    // the square accumulator's output is divided by 2, so shift up
+    assign sq_accum_o[0] = 1'b0;
     
     generate
         genvar i;
