@@ -36,8 +36,9 @@ module agc_design(
     reg [20:0] gt_accum_reg = {21{1'b0}};
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [20:0] lt_accum_reg = {21{1'b0}};
+    // the bottom bit here will get trimmed off
     (* CUSTOM_CC_DST = WBCLKTYPE *)
-    reg [23:0] sq_accum_reg = {24{1'b0}};
+    reg [24:0] sq_accum_reg = {25{1'b0}};
     
     // agc scale
     (* CUSTOM_CC_SRC = WBCLKTYPE *)
@@ -94,7 +95,7 @@ module agc_design(
     // BIT 9 = load offset
     // BIT 10 = apply
     assign register_data[0] = {{30{1'b0}},agc_done,1'b0};
-    assign register_data[1] = { {8{1'b0}},sq_accum_reg };
+    assign register_data[1] = { {7{1'b0}},sq_accum_reg };
     assign register_data[2] = { {11{1'b0}},gt_accum_reg };
     assign register_data[3] = { {11{1'b0}},lt_accum_reg };
     assign register_data[4] = { {15{1'b0}},agc_scale };
