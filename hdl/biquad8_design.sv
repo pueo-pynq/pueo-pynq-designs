@@ -134,7 +134,7 @@ module biquad8_design(
                       .OUTFRAC(0),
                       .WBCLKTYPE("PSCLK"),
                       .CLKTYPE("ACLK"))
-        u_biquad8_A(.wb_clk_i(ps_clk),
+        u_biquad8_A(.wb_clk_i(wb_clk_i),
                   .wb_rst_i(1'b0),
                   `CONNECT_WBS_IFM( wb_ , bq0_ ),
                   .clk_i(aclk),
@@ -149,7 +149,7 @@ module biquad8_design(
                       .OUTFRAC(0),
                       .WBCLKTYPE("PSCLK"),
                       .CLKTYPE("ACLK"))
-        u_biquad8_B(.wb_clk_i(ps_clk),
+        u_biquad8_B(.wb_clk_i(wb_clk_i),
                   .wb_rst_i(1'b0),
                   `CONNECT_WBS_IFM( wb_ , bq1_ ),
                   .clk_i(aclk),
