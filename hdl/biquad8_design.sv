@@ -161,8 +161,14 @@ module biquad8_design(
     `AXIS_ASSIGN( gate1_ , buf1_ );
     `AXIS_ASSIGN( bqdat0_ , buf2_ );
     `AXIS_ASSIGN( bqdat1_ , buf3_ );
-
-    `AXIS_ASSIGN( bqdat0_ , dac0_ );
-    `AXIS_ASSIGN( bqdat1_ , dac1_ );
+    // you can't doubly-assign an AXI4-Stream using the AXIS_ASSIGN
+    // macros because it doubly-ties the tready signals
+    // (e.g. it does assign bqdat0_tready = buf2_tready above,
+    // then assign bqdat0_tready = dac0_tready here.
+    // it doesn't really matter since we ignore treadys anyway.
+    assign dac0_tdata = bqdat0_tdata;
+    assign dac0_tvalid = bqdat0_tvalid;
+    assign dac1_tdata = bqdat1_tdata;
+    assign dac1_tvalid = bqdat1_tvalid;
 
 endmodule
