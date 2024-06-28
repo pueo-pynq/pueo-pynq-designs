@@ -111,6 +111,8 @@ module biquad8_design(
                          .CE(1'b1),
                          .Q31(gate_delay_done));                                 
     always @(posedge aclk) begin
+        capture_rereg <= { capture_rereg[0], capture_i };
+    
         if (capture_delay) adc_gate <= 1'b1;
         else if (gate_delay_done) adc_gate <= 1'b0;
         
