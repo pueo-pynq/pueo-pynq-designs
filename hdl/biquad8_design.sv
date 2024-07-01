@@ -94,11 +94,10 @@ module biquad8_design(
     reg [127:0] adc0_rereg = {128{1'b0}};
     reg [127:0] adc1_rereg = {128{1'b0}};
     reg adc_gate = 0;
-    reg [1:0] capture_rereg = {2{1'b0}};
     wire capture_delay;
     wire mid_gate_delay;
     wire gate_delay_done;
-    SRLC32E u_gate_delay(.D(capture_rereg[0] && !capture_rereg[1]),
+    SRLC32E u_gate_delay(.D(capture_i),
                          .CLK(aclk),
                          .CE(1'b1),
                          .Q31(capture_delay));
@@ -111,8 +110,6 @@ module biquad8_design(
                          .CE(1'b1),
                          .Q31(gate_delay_done));                                 
     always @(posedge aclk) begin
-        capture_rereg <= { capture_rereg[0], capture_i };
-    
         if (capture_delay) adc_gate <= 1'b1;
         else if (gate_delay_done) adc_gate <= 1'b0;
         
