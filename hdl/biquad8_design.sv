@@ -97,6 +97,10 @@ module biquad8_design(
     wire capture_delay;
     wire mid_gate_delay;
     wire gate_delay_done;
+    wire post_gate_delay_1;
+    wire post_gate_delay_2;
+    wire post_gate_finish;
+    reg biquad_reset = 0;
     SRLC32E u_gate_delay(.D(capture_i),
                          .CLK(aclk),
                          .CE(1'b1),
@@ -109,6 +113,18 @@ module biquad8_design(
                          .CLK(aclk),
                          .CE(1'b1),
                          .Q31(gate_delay_done));                                 
+        SRLC32E u_postgate_0(.D(gate_delay_done),
+                             .CLK(aclk),
+                             .CE(1'b1),
+                             .Q31(post_gate_delay_0));
+        SRLC32E u_postgate_1(.D(post_gate_delay_1),
+                             .CLK(aclk),
+                             .CE(1'b1),
+                             .Q31(post_gate_delay_1));
+        SRLC32E u_postgate_finish(.D(post_gate_delay_1),
+                                  .CLK(aclk),
+                                  .CE(1'b1),
+                                  .Q31(post_gate_finish));
     always @(posedge aclk) begin
         if (capture_delay) adc_gate <= 1'b1;
         else if (gate_delay_done) adc_gate <= 1'b0;
@@ -118,6 +134,8 @@ module biquad8_design(
         
         if (adc_gate) adc1_rereg <= adc1_tdata;
         else adc1_rereg <= {128{1'b0}};
+
+        biquad_reset <= post_gate_finish;
     end
     
     assign gate0_tdata = adc0_rereg;
@@ -137,6 +155,7 @@ module biquad8_design(
                   .wb_rst_i(1'b0),
                   `CONNECT_WBS_IFM( wb_ , bq0_ ),
                   .clk_i(aclk),
+                  .rst_i(biquad_reset),
                   .global_update_i(1'b0),
                   .dat_i(unpack(gate0_tdata)),
                   .dat_o(bq_out[0]));   
@@ -152,6 +171,7 @@ module biquad8_design(
                   .wb_rst_i(1'b0),
                   `CONNECT_WBS_IFM( wb_ , bq1_ ),
                   .clk_i(aclk),
+                  .rst_i(biquad_reset),
                   .global_update_i(1'b0),
                   .dat_i(unpack(gate1_tdata)),
                   .dat_o(bq_out[1]));   
