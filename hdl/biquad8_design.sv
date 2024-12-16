@@ -117,7 +117,7 @@ module biquad8_design(
                              .CLK(aclk),
                              .CE(1'b1),
                              .Q31(post_gate_delay_0));
-        SRLC32E u_postgate_1(.D(post_gate_delay_1),
+        SRLC32E u_postgate_1(.D(post_gate_delay_0),
                              .CLK(aclk),
                              .CE(1'b1),
                              .Q31(post_gate_delay_1));
@@ -135,7 +135,8 @@ module biquad8_design(
         if (adc_gate) adc1_rereg <= adc1_tdata;
         else adc1_rereg <= {128{1'b0}};
 
-        biquad_reset <= post_gate_finish;
+            if (post_gate_delay_1) biquad_reset <= 1'b1;
+            else if (post_gate_finish) biquad_reset <= 1'b0;
     end
     
     assign gate0_tdata = adc0_rereg;
