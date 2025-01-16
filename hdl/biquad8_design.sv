@@ -98,10 +98,12 @@ module biquad8_design(
     // if we have 2 internal delays we need
     // 3 signals: input to 0, between 0->1, output from 1
     // so it's NUM_GATE_DELAYS:0
+    // this has to be at least 2
     localparam NUM_GATE_DELAYS = 3;
     wire [NUM_GATE_DELAYS:0] internal_chain;
     assign internal_chain[0] = capture_i;
     wire gate_delay_done = internal_chain[NUM_GATE_DELAYS];    
+    wire capture_delay = internal_chain[1];
     generate
         genvar i;
         for (i=0;i<NUM_GATE_DELAYS;i=i+1) begin : DLP
