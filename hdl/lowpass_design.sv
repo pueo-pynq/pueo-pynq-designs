@@ -56,19 +56,19 @@ module lowpass_design(
     wire [95:0] filt_out[3:0];
    
     shannon_whitaker_lpfull_v2 #(.NBITS(12),.OUTQ_INT(12),.OUTQ_FRAC(0)) 
-      u_lpfull( .clk_i(aclk),
+      u_lpfull0( .clk_i(aclk),
 		.in_i(unpack(adc0_tdata)),
 		.out_o( filt_out[0] ) );
     shannon_whitaker_lpfull_v2 #(.NBITS(12),.OUTQ_INT(12),.OUTQ_FRAC(0)) 
-      u_lpfull( .clk_i(aclk),
+      u_lpfull1( .clk_i(aclk),
 		.in_i(unpack(adc1_tdata)),
 		.out_o( filt_out[1] ) );
     shannon_whitaker_lpfull_v2 #(.NBITS(12),.OUTQ_INT(12),.OUTQ_FRAC(0)) 
-      u_lpfull( .clk_i(aclk),
+      u_lpfull2( .clk_i(aclk),
 		.in_i(unpack(adc2_tdata)),
 		.out_o( filt_out[2] ) );
     shannon_whitaker_lpfull_v2 #(.NBITS(12),.OUTQ_INT(12),.OUTQ_FRAC(0)) 
-      u_lpfull( .clk_i(aclk),
+      u_lpfull3( .clk_i(aclk),
 		.in_i(unpack(adc3_tdata)),
 		.out_o( filt_out[3] ) );
 
