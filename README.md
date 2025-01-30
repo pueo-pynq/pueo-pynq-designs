@@ -23,3 +23,5 @@ sdv.write(0x100, 0x12345)
 # read from 0x184
 val = sdv.read(0x184)
 ```
+
+n.b. the pueo-python repository has reorganized recently, serialcobsdevice.py is located under ``pueo/common``.
