@@ -94,6 +94,7 @@ module biquad8_design(
     reg [127:0] adc0_rereg = {128{1'b0}};
     reg [127:0] adc1_rereg = {128{1'b0}};
     reg adc_gate = 0;
+    reg rearm_impulse=1;
     wire capture_delay;
     wire mid_gate_delay;
     wire gate_delay_done;
@@ -108,16 +109,47 @@ module biquad8_design(
     SRLC32E u_delay_done(.D(mid_gate_delay),
                          .CLK(aclk),
                          .CE(1'b1),
-                         .Q31(gate_delay_done));                                 
+                         .Q31(gate_delay_done));       
+
+    // Gate the output
+    // always @(posedge aclk) begin
+    //     if (capture_delay) adc_gate <= 1'b1;
+    //     else if (gate_delay_done) adc_gate <= 1'b0;
+        
+    //     if (adc_gate) adc0_rereg <= adc0_tdata;
+    //     else adc0_rereg <= {128{1'b0}};
+        
+    //     if (adc_gate) adc1_rereg <= adc1_tdata;
+    //     else adc1_rereg <= {128{1'b0}};
+    // end
+
+    reg [3:0] counter = 4'b0;
+    reg [127:0] impulse_value = {{112{1'b0}},{16'h1000}};
+    // Alternative to the above, put an impulse in
     always @(posedge aclk) begin
-        if (capture_delay) adc_gate <= 1'b1;
-        else if (gate_delay_done) adc_gate <= 1'b0;
+        if (capture_delay && !adc_gate && rearm_impulse) begin
+            adc_gate <= 1'b1;
+            rearm_impulse <= 1'b0 ;
+            counter <= 4'b1111;//4'b0;
+            impulse_value <= {{96{1'b0}},{16'h0000},{16'h0010}};//Second
+        end else begin
+            adc_gate <= 1'b0;
+        end
+
+        // if(!capture_delay && !rearm_impulse) rearm_impulse <= 1'b1;
         
-        if (adc_gate) adc0_rereg <= adc0_tdata;
-        else adc0_rereg <= {128{1'b0}};
-        
-        if (adc_gate) adc1_rereg <= adc1_tdata;
-        else adc1_rereg <= {128{1'b0}};
+        // Put an impulse in
+        if (adc_gate || counter > 0) begin 
+            adc0_rereg <= impulse_value;
+            //impulse_value <= {impulse_value[111:0],{16'h0000}};
+            counter = counter + 1'b1;
+        end else begin  
+            rearm_impulse <= 1'b1;
+            adc0_rereg <= {128{1'b0}};
+        end
+        adc1_rereg <= adc1_tdata;
+        // if (adc_gate) adc1_rereg <= adc1_tdata;
+        // else adc1_rereg <= {128{1'b0}};
     end
     
     assign gate0_tdata = adc0_rereg;
