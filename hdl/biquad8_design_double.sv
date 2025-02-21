@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
-module biquad8_design(
+module biquad8_design_double(
         input wb_clk_i,
         input wb_rst_i,
         `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ),        
@@ -181,6 +181,7 @@ module biquad8_design(
                   .global_update_i(1'b0),
                 //   .dat_i(unpack(gate1_tdata)),
                   .dat_i(bq_out[0]),
+                //   .dat_i(unpack(adc1_tdata)),
                   .dat_o(bq_out[1]));   
 
     `AXIS_ASSIGN( gate0_ , buf0_ );
