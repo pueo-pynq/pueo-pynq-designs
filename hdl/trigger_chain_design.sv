@@ -1,0 +1,84 @@
+`timescale 1ns / 1ps
+`include "interfaces.vh"
+
+// Pre-trigger filter chain.
+// 1) Shannon-Whitaker low pass filter
+// 2) Two Biquads in serial (to be used as notches)
+// TODO Make fixed point parameterizable
+module trigger_chain_design(
+        // Wishbone stuff for writing in coefficients to the biquads
+        input wb_clk_i,
+        input wb_rst_i,
+        `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ), // Address width, data width. Address is at size limit
+        // Control to capture the output to the RAM buffer
+        input reset_BQ_i, 
+        input aclk,
+        input dat_i[127:0],
+        
+        output dat_o[127:0]
+    );
+
+    // QUALITY OF LIFE FUNCTIONS
+
+    // UNPACK is 128 -> 96
+    function [95:0] unpack;
+        input [127:0] data_in;
+        integer i;
+        begin
+            for (i=0;i<8;i=i+1) begin
+                unpack[12*i +: 12] = data_in[(16*i+4) +: 12];
+            end
+        end
+    endfunction
+    // PACK is 96 -> 128
+    function [127:0] pack;
+        input [95:0] data_in;
+        integer i;
+        begin
+            for (i=0;i<8;i=i+1) begin
+                pack[(16*i+4) +: 12] = data_in[12*i +: 12];
+                pack[(16*i) +: 4] = {4{1'b0}};
+            end
+        end
+    endfunction    
+
+    wire [95:0] data_stage_connection; // In 12 bits since that's what the LPF works in
+
+    // Low pass filter
+
+    // parameter NBITS=12,
+    //                                 parameter NSAMPS=8,
+    //                                 parameter OUTQ_INT=12,
+    //                                 parameter OUTQ_FRAC=0
+
+    shannon_whitaker_lpfull_v2 u_lpf (  .clk_i(aclk),
+                                        .in_i(unpack(dat_i)),
+                                        .out_o(data_stage_connection));
+
+    // Biquads
+
+    biquad8_double_design u_biquadx2(
+        .wb_clk_i(wb_clk_i),
+        .wb_rst_i(wb_rst_i),        
+        `CONNECT_WBS_IFM( wb_ , wb_ ),
+        .reset_BQ_i(reset_BQ_i),
+        .aclk(aclk),
+        .dat_i(data_stage_connection),
+        .dat_o(dat_o)
+    );
+
+    // biquad8_design_double u_design( .wb_clk_i(ps_clk),
+    //                                         .wb_rst_i(1'b0),
+    //                                         `CONNECT_WBS_IFM( wb_ , bm_ ),
+    //                                         .aclk(aclk),
+    //                                         .aresetn(1'b1),
+    //                                         .capture_i(capture),
+    //                                         `CONNECT_AXI4S_MIN_IF( adc0_ , adc0_ ),
+    //                                         // buffers
+    //                                         `CONNECT_AXI4S_MIN_IF( buf0_ , buf0_ ),
+    //                                         // DACs
+    //                                         `CONNECT_AXI4S_MIN_IF( dac0_ , design_dac0_ ));
+    //         
+
+
+endmodule

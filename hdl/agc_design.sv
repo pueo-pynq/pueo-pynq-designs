@@ -26,9 +26,9 @@ module agc_design(
     parameter CLKTYPE = "ACLK";
     
     // Outputs of the AGC core
-    wire [20:0] gt_accum_out;
-    wire [20:0] lt_accum_out;
-    wire [24:0] sq_accum_out;
+    wire [20:0] gt_accum_out; // Greater than accumulator   
+    wire [20:0] lt_accum_out; // Less than accumumaltor
+    wire [24:0] sq_accum_out; // Accumulate the squares
     
     // Capture of square, gt, lt accumulators. These are wb-clk land
     // AGC tick is delayed for capture.
