@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-module biquad8_wrapper_tb;
+module trigger_chain_tb;
     
     parameter       THIS_DESIGN = "BASIC";
 
@@ -29,26 +29,32 @@ module biquad8_wrapper_tb;
     assign wb_adr_o = address;
     assign ack = wb_ack_i;
 
-    task do_write;
+    task do_write; //  TODO The issue could be the lack of a flag sync in biquad8_double_design.sv, unlike biquad8_wrapper.sv //L
         input [7:0] in_addr;
         input [31:0] in_data;
         begin
             @(posedge wbclk);
             #1 wr = 1; address = in_addr; data = in_data;
             @(posedge wbclk);
-            while (!ack) #1 @(posedge wbclk);
+            while (!ack) #1 @(posedge wbclk); // TODO This is getting passed by not-ing high impedence 
             #1 wr = 0;
         end
     endtask
 
     // Probes
-    wire [47:0] probe0;
-    wire [47:0] probe1;
+    // Output Samples, both indexed and as one array
+    wire [11:0] probe0[7:0];
+    wire [12*8-1:0] probe0_arr;
+    generate
+        genvar j;
+        for (j=0;j<8;j=j+1) begin : DEVEC_PROBE0
+            assign probe0[j] = probe0_arr[12*j +: 12];
+        end
+    endgenerate
 
     // ADC samples, both indexed and as one array
     reg [11:0] samples[7:0];
-    integer i;
-    initial for (i=0;i<8;i=i+1) samples[i] <= 0;
+    initial for (int i=0;i<8;i=i+1) samples[i] <= 0;
     wire [12*8-1:0] sample_arr =
         { samples[7],
           samples[6],
@@ -63,9 +69,9 @@ module biquad8_wrapper_tb;
     wire [11:0] outsample[7:0];
     wire [12*8-1:0] outsample_arr;
     generate
-        genvar j;
-        for (j=0;j<8;j=j+1) begin : DEVEC
-            assign outsample[j] = outsample_arr[12*j +: 12];
+        genvar k;
+        for (k=0;k<8;k=k+1) begin : DEVEC
+            assign outsample[k] = outsample_arr[12*k +: 12];
         end
     endgenerate
 
@@ -83,7 +89,8 @@ module biquad8_wrapper_tb;
             .reset_BQ_i(bq_reset), 
             .aclk(aclk),
             .dat_i(sample_arr),
-            .dat_o(outsample_arr));
+            .dat_o(outsample_arr),
+            .probes(probe0_arr));
 
     end else begin : DEFAULT // Currently the same as "BASIC"
         trigger_chain_design u_chain(
@@ -93,7 +100,8 @@ module biquad8_wrapper_tb;
             .reset_BQ_i(bq_reset), 
             .aclk(aclk),
             .dat_i(sample_arr),
-            .dat_o(outsample_arr));
+            .dat_o(outsample_arr),
+            .probes(probe0_arr));
     end
 
     integer fc, fd, f, fdebug; // File Descriptors for I/O of test
@@ -105,7 +113,7 @@ module biquad8_wrapper_tb;
         #150;
 
 
-        if (THIS_DESIGN == "BASIC") begin : BASIC
+        if (THIS_DESIGN == "BASIC") begin : BASIC_RUN
                 // Notch location
             for(int notch=600; notch<1200; notch = notch+5000) begin
 
@@ -115,11 +123,11 @@ module biquad8_wrapper_tb;
 
                     for (int bqidx=0; bqidx<2; bqidx = bqidx+1) begin: BQ_LOOP
 
-                        monitor($sformatf("Prepping Biquad %1d", bqidx));
-                        $monitor($sformatf("Notch at %1d MHz, Q at %1d", notch+bqids*150, Q));
+                        $monitor($sformatf("Prepping Biquad %1d", bqidx));
+                        $monitor($sformatf("Notch at %1d MHz, Q at %1d", notch+bqidx*150, Q));
 
                         // LOAD BIQUAD NOTCH COEFFICIENTS FROM A FILE
-                        fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", notc+bqids*150, Q),"r");
+                        fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", notch+bqidx*150, Q),"r");
 
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
@@ -228,8 +236,8 @@ module biquad8_wrapper_tb;
                             $fwrite(f,$sformatf("%1d\n",outsample[i]));
                             #0.01;
                         end
-                        $fwrite(fdebug,$sformatf("%1d\n",probe0));
-                        $fwrite(fdebug,$sformatf("%1d\n",probe1));
+                        $fwrite(fdebug,$sformatf("%1d\n",0));
+                        $fwrite(fdebug,$sformatf("%1d\n",0));
                         $fwrite(fdebug,$sformatf("%1d\n",0));
                         $fwrite(fdebug,$sformatf("%1d\n",0));
                         $fwrite(fdebug,$sformatf("%1d\n",0));
@@ -239,12 +247,12 @@ module biquad8_wrapper_tb;
                     end
 
                     // Biquad reset
-                    bq_reset_reg = 1b1;
+                    bq_reset_reg = 1'b1;
                     for(int clocks=0;clocks<32;clocks++) begin
                         @(posedge aclk);
                         #0.01;
                     end
-                    bq_reset_reg = 1b0;
+                    bq_reset_reg = 1'b0;
 
                     $fclose(fd);
                     $fclose(fdebug);
@@ -272,8 +280,8 @@ module biquad8_wrapper_tb;
                                 $fwrite(f,$sformatf("%1d\n",outsample[i]));
                                 #0.01;
                             end
-                            $fwrite(fdebug,$sformatf("%1d\n",probe0));
-                            $fwrite(fdebug,$sformatf("%1d\n",probe1));
+                            $fwrite(fdebug,$sformatf("%1d\n",0));
+                            $fwrite(fdebug,$sformatf("%1d\n",0));
                             $fwrite(fdebug,$sformatf("%1d\n",0));
                             $fwrite(fdebug,$sformatf("%1d\n",0));
                             $fwrite(fdebug,$sformatf("%1d\n",0));
@@ -283,19 +291,19 @@ module biquad8_wrapper_tb;
                         end
 
                         // Biquad reset
-                        bq_reset_reg = 1b1;
+                        bq_reset_reg = 1'b1;
                         for(int clocks=0;clocks<32;clocks++) begin
                             @(posedge aclk);
                             #0.01;
                         end
-                        bq_reset_reg = 1b0;
+                        bq_reset_reg = 1'b0;
                         $fclose(fd);
                         $fclose(fdebug);
                         $fclose(f);
                     end
                 end
             end
-        end else begin : DEFAULT_CASE
+        end else begin : DEFAULT_RUN
             $monitor("THIS_DESIGN set to something other");       
         end
     end

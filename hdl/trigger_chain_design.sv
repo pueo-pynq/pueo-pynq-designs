@@ -13,9 +13,10 @@ module trigger_chain_design(
         // Control to capture the output to the RAM buffer
         input reset_BQ_i, 
         input aclk,
-        input dat_i[95:0],
+        input [95:0] dat_i,
         
-        output dat_o[95:0]
+        output [95:0] dat_o,
+        output [95:0] probes
     );
 
     // QUALITY OF LIFE FUNCTIONS
@@ -50,6 +51,8 @@ module trigger_chain_design(
                                         .in_i(dat_i),
                                         .out_o(data_stage_connection));
 
+    // assign probes = data_stage_connection;
+
     // Biquads
 
     biquad8_double_design u_biquadx2(
@@ -59,7 +62,8 @@ module trigger_chain_design(
         .reset_BQ_i(reset_BQ_i),
         .aclk(aclk),
         .dat_i(data_stage_connection),
-        .dat_o(dat_o)
+        .dat_o(dat_o),
+        .probes(probes)
     );
 
 
