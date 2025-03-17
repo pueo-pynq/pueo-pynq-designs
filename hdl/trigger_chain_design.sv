@@ -13,9 +13,9 @@ module trigger_chain_design(
         // Control to capture the output to the RAM buffer
         input reset_BQ_i, 
         input aclk,
-        input dat_i[127:0],
+        input dat_i[95:0],
         
-        output dat_o[127:0]
+        output dat_o[95:0]
     );
 
     // QUALITY OF LIFE FUNCTIONS
@@ -46,13 +46,8 @@ module trigger_chain_design(
 
     // Low pass filter
 
-    // parameter NBITS=12,
-    //                                 parameter NSAMPS=8,
-    //                                 parameter OUTQ_INT=12,
-    //                                 parameter OUTQ_FRAC=0
-
     shannon_whitaker_lpfull_v2 u_lpf (  .clk_i(aclk),
-                                        .in_i(unpack(dat_i)),
+                                        .in_i(dat_i),
                                         .out_o(data_stage_connection));
 
     // Biquads
@@ -66,19 +61,6 @@ module trigger_chain_design(
         .dat_i(data_stage_connection),
         .dat_o(dat_o)
     );
-
-    // biquad8_design_double u_design( .wb_clk_i(ps_clk),
-    //                                         .wb_rst_i(1'b0),
-    //                                         `CONNECT_WBS_IFM( wb_ , bm_ ),
-    //                                         .aclk(aclk),
-    //                                         .aresetn(1'b1),
-    //                                         .capture_i(capture),
-    //                                         `CONNECT_AXI4S_MIN_IF( adc0_ , adc0_ ),
-    //                                         // buffers
-    //                                         `CONNECT_AXI4S_MIN_IF( buf0_ , buf0_ ),
-    //                                         // DACs
-    //                                         `CONNECT_AXI4S_MIN_IF( dac0_ , design_dac0_ ));
-    //         
 
 
 endmodule
