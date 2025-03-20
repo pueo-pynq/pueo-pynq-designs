@@ -63,7 +63,7 @@ module biquad8_double_design(
     // these are the outputs
     wire [95:0] bq_out[1:0];
     assign dat_o = bq_out[1];
-    assign probes[0] = wb_stb_i;
+    // assign probes[21:0] = wb_adr_i;
     
     
     biquad8_wrapper #(.NBITS(12),

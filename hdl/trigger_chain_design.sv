@@ -51,19 +51,20 @@ module trigger_chain_design(
                                         .in_i(dat_i),
                                         .out_o(data_stage_connection));
 
-    // assign probes = data_stage_connection;
+    assign probes = wb_adr_i;
+    wire [95:0] probe_to_nowhere;
 
     // Biquads
 
     biquad8_double_design u_biquadx2(
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),        
-        `CONNECT_WBS_IFM( wb_ , wb_ ),
+        `CONNECT_WBS_IFS( wb_ , wb_ ),
         .reset_BQ_i(reset_BQ_i),
         .aclk(aclk),
         .dat_i(data_stage_connection),
         .dat_o(dat_o),
-        .probes(probes)
+        .probes(probe_to_nowhere)
     );
 
 
