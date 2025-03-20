@@ -115,19 +115,19 @@ module trigger_chain_tb;
 
         if (THIS_DESIGN == "BASIC") begin : BASIC_RUN
                 // Notch location
-            for(int notch=600; notch<1200; notch = notch+5000) begin
+            for(int notch=260; notch<1200; notch = notch+5000) begin
 
                 // Qs for notch
-                for(int Q=3; Q<8; Q = Q+50) begin
+                for(int Q=7; Q<8; Q = Q+50) begin
 
 
                     for (int bqidx=0; bqidx<2; bqidx = bqidx+1) begin: BQ_LOOP
 
                         $monitor($sformatf("Prepping Biquad %1d", bqidx));
-                        $monitor($sformatf("Notch at %1d MHz, Q at %1d", notch+bqidx*150, Q));
+                        $monitor($sformatf("Notch at %1d MHz, Q at %1d", notch+bqidx*200, Q));
 
                         // LOAD BIQUAD NOTCH COEFFICIENTS FROM A FILE
-                        fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", notch+bqidx*150, Q),"r");
+                        fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", notch+bqidx*200, Q),"r");
 
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
@@ -264,7 +264,7 @@ module trigger_chain_tb;
                         
                         fd = $fopen($sformatf("freqs/inputs/gauss_input_%1d_sigma_hanning_clipped_%0d.dat", GAUSS_NOISE_SIZE, in_count),"r");
                         f = $fopen($sformatf("freqs/outputs/trigger_chain_output_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
-                        fdebug = $fopen($sformatf("freqs/outputs/trigger_chain_output_debug_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
+                        fdebug = $fopen($sformatf("freqs/outputs/trigger_chain_output_lpf_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
                         $monitor($sformatf("freqs/outputs/trigger_chain_output_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch,Q));
 
                         code = 1;
@@ -278,16 +278,9 @@ module trigger_chain_tb;
                                 dummy = $sscanf(str, "%d", data_from_file);
                                 samples[i] = data_from_file;
                                 $fwrite(f,$sformatf("%1d\n",outsample[i]));
+                                $fwrite(fdebug,$sformatf("%1d\n",probe0[i]));
                                 #0.01;
                             end
-                            $fwrite(fdebug,$sformatf("%1d\n",0));
-                            $fwrite(fdebug,$sformatf("%1d\n",0));
-                            $fwrite(fdebug,$sformatf("%1d\n",0));
-                            $fwrite(fdebug,$sformatf("%1d\n",0));
-                            $fwrite(fdebug,$sformatf("%1d\n",0));
-                            $fwrite(fdebug,$sformatf("%1d\n",0));
-                            $fwrite(fdebug,$sformatf("%1d\n",0));
-                            $fwrite(fdebug,$sformatf("%1d\n",0));
                         end
 
                         // Biquad reset

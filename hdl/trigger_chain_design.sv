@@ -51,7 +51,7 @@ module trigger_chain_design(
                                         .in_i(dat_i),
                                         .out_o(data_stage_connection));
 
-    assign probes = wb_adr_i;
+    assign probes = data_stage_connection;
     wire [95:0] probe_to_nowhere;
 
     // Biquads
