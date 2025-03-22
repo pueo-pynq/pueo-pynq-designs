@@ -1,4 +1,5 @@
 `timescale 1ns / 1ps
+`include "interfaces.vh"
 module trigger_chain_tb;
     
     parameter       THIS_DESIGN = "BASIC";
@@ -15,7 +16,8 @@ module trigger_chain_tb;
     tb_rclk #(.PERIOD(10.0)) u_wbclk(.clk(wbclk));
     tb_rclk #(.PERIOD(5.0)) u_aclk(.clk(aclk));
 
-    // Wishbone Communication
+    // Wishbone Communication 
+    // For Biquad
     reg wr = 0;
     reg [7:0] address = {8{1'b0}};
     reg [31:0] data = {32{1'b0}};
@@ -29,15 +31,41 @@ module trigger_chain_tb;
     assign wb_adr_o = address;
     assign ack = wb_ack_i;
 
-    task do_write; //  TODO The issue could be the lack of a flag sync in biquad8_double_design.sv, unlike biquad8_wrapper.sv //L
+    task do_write_bq; 
         input [7:0] in_addr;
         input [31:0] in_data;
         begin
             @(posedge wbclk);
             #1 wr = 1; address = in_addr; data = in_data;
             @(posedge wbclk);
-            while (!ack) #1 @(posedge wbclk); // TODO This is getting passed by not-ing high impedence 
+            while (!ack) #1 @(posedge wbclk); 
             #1 wr = 0;
+        end
+    endtask
+
+    // For AGC (One channel at first)
+    reg wr_agc = 0;
+    reg [7:0] address_agc = {8{1'b0}};
+    reg [31:0] data_agc = {32{1'b0}};
+    wire ack_agc;
+    `DEFINE_WB_IF( wb_agc_ , 8, 32);
+    assign wb_agc_cyc_o = wr_agc;
+    assign wb_agc_stb_o = wr_agc;
+    assign wb_agc_we_o = wr_agc;
+    assign wb_agc_sel_o = {4{wr_agc}};
+    assign wb_agc_dat_o = data_agc;
+    assign wb_agc_adr_o = address_agc;
+    assign ack_agc = wb_agc_ack_i;
+
+    task do_write_agc; 
+        input [7:0] in_addr;
+        input [31:0] in_data;
+        begin
+            @(posedge wbclk);
+            #1 wr_agc = 1; address_agc = in_addr; data_agc = in_data;
+            @(posedge wbclk);
+            while (!ack_agc) #1 @(posedge wbclk);  
+            #1 wr_agc = 0;
         end
     endtask
 
@@ -66,12 +94,21 @@ module trigger_chain_tb;
           samples[0] };
 
     // Output Samples, both indexed and as one array
-    wire [11:0] outsample[7:0];
-    wire [12*8-1:0] outsample_arr;
+    // wire [11:0] outsample[7:0];
+    // wire [12*8-1:0] outsample_arr;
+    // generate
+    //     genvar k;
+    //     for (k=0;k<8;k=k+1) begin : DEVEC
+    //         assign outsample[k] = outsample_arr[12*k +: 12];
+    //     end
+    // endgenerate
+
+    wire [5:0] outsample[7:0];
+    wire [5*8-1:0] outsample_arr;
     generate
         genvar k;
         for (k=0;k<8;k=k+1) begin : DEVEC
-            assign outsample[k] = outsample_arr[12*k +: 12];
+            assign outsample[k] = outsample_arr[5*k +: 5];
         end
     endgenerate
 
@@ -86,7 +123,8 @@ module trigger_chain_tb;
             .wb_clk_i(wbclk),
             .wb_rst_i(1'b0),
             `CONNECT_WBS_IFM( wb_ , wb_ ),
-            .reset_BQ_i(bq_reset), 
+            `CONNECT_WBS_IFM( wb_agc_ , wb_agc_ ),
+            .reset_i(bq_reset), 
             .aclk(aclk),
             .dat_i(sample_arr),
             .dat_o(outsample_arr),
@@ -97,7 +135,8 @@ module trigger_chain_tb;
             .wb_clk_i(wbclk),
             .wb_rst_i(1'b0),
             `CONNECT_WBS_IFM( wb_ , wb_ ),
-            .reset_BQ_i(bq_reset), 
+            `CONNECT_WBS_IFM( wb_agc_ , wb_agc_ ),
+            .reset_i(bq_reset), 
             .aclk(aclk),
             .dat_i(sample_arr),
             .dat_o(outsample_arr),
@@ -131,90 +170,102 @@ module trigger_chain_tb;
 
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h04, coeff_from_file); // B
+                        do_write_bq( bqidx*8'h80 + 8'h04, coeff_from_file); // B
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h04, coeff_from_file); // A
+                        do_write_bq( bqidx*8'h80 + 8'h04, coeff_from_file); // A
 
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h08, coeff_from_file); // C_2
+                        do_write_bq( bqidx*8'h80 + 8'h08, coeff_from_file); // C_2
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h08, coeff_from_file); // C_3  // Yes, this is the correct order according to the documentation
+                        do_write_bq( bqidx*8'h80 + 8'h08, coeff_from_file); // C_3  // Yes, this is the correct order according to the documentation
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h08, coeff_from_file); // C_1
+                        do_write_bq( bqidx*8'h80 + 8'h08, coeff_from_file); // C_1
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h08, coeff_from_file); // C_0
+                        do_write_bq( bqidx*8'h80 + 8'h08, coeff_from_file); // C_0
 
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h0C, coeff_from_file); // a_1'  // For incremental computation, unused
+                        do_write_bq( bqidx*8'h80 + 8'h0C, coeff_from_file); // a_1'  // For incremental computation, unused
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h0C, coeff_from_file); // a_2'
+                        do_write_bq( bqidx*8'h80 + 8'h0C, coeff_from_file); // a_2'
 
                         // f FIR
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h10, coeff_from_file); // D_FF  
+                        do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file); // D_FF  
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h10, coeff_from_file); // X_6    
+                        do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file); // X_6    
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h10, coeff_from_file); // X_5   
+                        do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file); // X_5   
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_4   
+                        do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_4   
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_3   
+                        do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_3   
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_2   
+                        do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_2   
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_1 
+                        do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_1 
                     
                         // g FIR
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h14, coeff_from_file);  // E_GG  
+                        do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // E_GG  
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h14, coeff_from_file); // X_7 
+                        do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file); // X_7 
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_6
+                        do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_6
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_5    
+                        do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_5    
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_4  
+                        do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_4  
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_3  
+                        do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_3  
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_2  
+                        do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_2  
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_1 
+                        do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_1 
                         
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h18, coeff_from_file);  // D_FG
+                        do_write_bq( bqidx*8'h80 + 8'h18, coeff_from_file);  // D_FG
 
                         code = $fgets(str, fc);
                         dummy = $sscanf(str, "%d", coeff_from_file);
-                        do_write( bqidx*8'h80 + 8'h1C, coeff_from_file);  // E_GF
+                        do_write_bq( bqidx*8'h80 + 8'h1C, coeff_from_file);  // E_GF
 
-                        do_write( bqidx*8'h80 + 8'h00, 32'd1 );     // Update
+                        do_write_bq( bqidx*8'h80 + 8'h00, 32'd1 );     // Update
                     end 
+                    
+                    $monitor("Prepping AGC");
+                    
+                    do_write_agc(8'h14, 80); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+                    do_write_agc(8'h10, 4096); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+                    
+                    // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
+                    // The first signal here tells the offset and scale to load into the first FF
+                    // and the second signal applies them via the second FF.
+                    do_write_agc(8'h00, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+                    do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+
 
                     // SEND IN AN IMPULSE
                     #500;

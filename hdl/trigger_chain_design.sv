@@ -5,17 +5,22 @@
 // 1) Shannon-Whitaker low pass filter
 // 2) Two Biquads in serial (to be used as notches)
 // TODO Make fixed point parameterizable
-module trigger_chain_design(
-        // Wishbone stuff for writing in coefficients to the biquads
+module trigger_chain_design(        
         input wb_clk_i,
         input wb_rst_i,
+
+        // Wishbone stuff for writing in coefficients to the biquads
         `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ), // Address width, data width. Address is at size limit
+
+        // Wishbone stuff for writing to the AGC
+        `TARGET_NAMED_PORTS_WB_IF( wb_agc_ , 22, 32 ), // Address width, data width. Address is at size limit
+        
         // Control to capture the output to the RAM buffer
-        input reset_BQ_i, 
+        input reset_i, 
         input aclk,
         input [95:0] dat_i,
         
-        output [95:0] dat_o,
+        output [39:0] dat_o,
         output [95:0] probes
     );
 
@@ -43,16 +48,16 @@ module trigger_chain_design(
         end
     endfunction    
 
-    wire [95:0] data_stage_connection; // In 12 bits since that's what the LPF works in
+    wire [95:0] data_stage_connection [1:0]; // In 12 bits since that's what the LPF works in
 
     // Low pass filter
 
     shannon_whitaker_lpfull_v2 u_lpf (  .clk_i(aclk),
                                         .in_i(dat_i),
-                                        .out_o(data_stage_connection));
+                                        .out_o(data_stage_connection[0]));
 
-    assign probes = data_stage_connection;
-    wire [95:0] probe_to_nowhere;
+    assign probes = data_stage_connection[0];
+    wire [95:0] probe_to_nowhere[1:0];
 
     // Biquads
 
@@ -60,12 +65,24 @@ module trigger_chain_design(
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),        
         `CONNECT_WBS_IFS( wb_ , wb_ ),
-        .reset_BQ_i(reset_BQ_i),
+        .reset_BQ_i(reset_i),
         .aclk(aclk),
-        .dat_i(data_stage_connection),
-        .dat_o(dat_o),
-        .probes(probe_to_nowhere)
+        .dat_i(data_stage_connection[0]),
+        .dat_o(data_stage_connection[1]),
+        .probes(probe_to_nowhere[0])
     );
+
+    agc_design_minimal u_agc_design_minimal(
+        .wb_clk_i(wb_clk_i),
+        .wb_rst_i(wb_rst_i),        
+        `CONNECT_WBS_IFS( wb_agc_ , wb_ ),
+        .aclk(aclk),
+        .aresetn(reset_i),
+        .dat_i(data_stage_connection[1])
+        
+        .dat_o(dat_o),
+        .probes(probe_to_nowhere[1])
+    )
 
 
 endmodule
