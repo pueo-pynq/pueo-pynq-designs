@@ -75,14 +75,14 @@ module trigger_chain_design(
     agc_design_minimal u_agc_design_minimal(
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),        
-        `CONNECT_WBS_IFS( wb_agc_ , wb_ ),
+        `CONNECT_WBS_IFS( wb_ , wb_agc_ ),
         .aclk(aclk),
         .aresetn(reset_i),
-        .dat_i(data_stage_connection[1])
+        .dat_i(dat_i),//(data_stage_connection[1]),
         
         .dat_o(dat_o),
         .probes(probe_to_nowhere[1])
-    )
+    );
 
 
 endmodule

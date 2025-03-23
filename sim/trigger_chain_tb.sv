@@ -257,9 +257,14 @@ module trigger_chain_tb;
                     
                     $monitor("Prepping AGC");
                     
-                    do_write_agc(8'h14, 80); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-                    do_write_agc(8'h10, 4096); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-                    
+                    do_write_agc(8'h14, 0); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+                    // I believe from other documentation
+                    // that scale is a fraction of 4096 (13 bits, 0x1000).
+                    do_write_agc(8'h10, 17'd32); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+                    // Lets put in 32/4096 = 1/128. With a pulse of 512 that becomes 4
+                    // This resulted in a value of 17 (16+1, so 1). I believe this is due to two fractional bits being removed? 
+                    // Specifically, NFRAC_OUT in agc_dsp.sv
+
                     // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
                     // The first signal here tells the offset and scale to load into the first FF
                     // and the second signal applies them via the second FF.
