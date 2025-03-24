@@ -3,12 +3,30 @@
 module trigger_chain_tb;
     
     parameter       THIS_DESIGN = "BASIC";
+    parameter       THIS_STIM   = "SINE";//"GAUSS_RAND";
 
     // Biquad Parameters
     int notch = 650;
     int Q = 8;        
     localparam int GAUSS_NOISE_SIZE = 1000;
 
+    // AGC Parameters
+    int AGC_offset = 0;
+
+    int AGC_scale = 1024;
+    // For a scale value of 32, 32/4096 = 1/128. With a pulse of 512 that becomes 4
+    // This resulted in a value of 17 (16+1, so 1). I believe this is due to two fractional bits being removed? Maybe 3, with rounding.
+    // Specifically, NFRAC_OUT in agc_dsp.sv
+
+    // Gaussian Random Parameters
+    int seed = 1;
+    int stim_mean = 0;
+    int stim_sdev = 100; // Note that max value is 2047 (and -2048)
+    int stim_clks = 100007;
+
+    // Sine scale
+    int sine_scale = 1;
+    int sine_mag = 500;
 
     // Clocks
     wire wbclk;
@@ -44,28 +62,53 @@ module trigger_chain_tb;
     endtask
 
     // For AGC (One channel at first)
-    reg wr_agc = 0;
     reg [7:0] address_agc = {8{1'b0}};
-    reg [31:0] data_agc = {32{1'b0}};
+    reg [31:0] data_agc_o = {32{1'b0}};
+    reg [31:0] data_agc_i = {32{1'b0}};
     wire ack_agc;
     `DEFINE_WB_IF( wb_agc_ , 8, 32);
-    assign wb_agc_cyc_o = wr_agc;
-    assign wb_agc_stb_o = wr_agc;
-    assign wb_agc_we_o = wr_agc;
-    assign wb_agc_sel_o = {4{wr_agc}};
-    assign wb_agc_dat_o = data_agc;
+    assign wb_agc_dat_o = data_agc_o;
+    assign wb_agc_dat_i = data_agc_i;
     assign wb_agc_adr_o = address_agc;
     assign ack_agc = wb_agc_ack_i;
+
+    // reg wr_agc = 0; // QOL tie these together if not ever implementing writing
+    // assign wb_agc_cyc_o = wr_agc;
+    // assign wb_agc_stb_o = wr_agc;
+    // assign wb_agc_we_o = wr_agc;
+    // assign wb_agc_sel_o = {4{wr_agc}};
+
+    reg use_agc = 0; // QOL tie these together if not ever implementing writing
+    reg wr_agc = 0; // QOL tie these together if not ever implementing writing
+    assign wb_agc_cyc_o = wr_agc;
+    assign wb_agc_stb_o = wr_agc;
+    assign wb_agc_we_o = wr_agc; // Tie this in too if only ever writing
+    assign wb_agc_sel_o = {4{wr_agc}};
 
     task do_write_agc; 
         input [7:0] in_addr;
         input [31:0] in_data;
         begin
             @(posedge wbclk);
-            #1 wr_agc = 1; address_agc = in_addr; data_agc = in_data;
+            #1 use_agc = 1; wr_agc=1; address_agc = in_addr; data_agc_o = in_data;
             @(posedge wbclk);
             while (!ack_agc) #1 @(posedge wbclk);  
-            #1 wr_agc = 0;
+            #1 use_agc = 0; wr_agc=0;
+        end
+    endtask
+
+    // TODO: Under development
+    task do_read_agc; 
+        input [7:0] in_addr;
+        output [31:0] out_data;
+        begin
+            @(posedge wbclk);
+            #1 use_agc = 1; wr_agc = 0; address_agc = in_addr;
+            @(posedge wbclk);
+            while (!ack_agc) #1 @(posedge wbclk);  
+            out_data = data_agc_i;
+            #1 use_agc = 0;
+            while (ack_agc) #1 @(posedge wbclk)
         end
     endtask
 
@@ -143,16 +186,18 @@ module trigger_chain_tb;
             .probes(probe0_arr));
     end
 
-    integer fc, fd, f, fdebug; // File Descriptors for I/O of test
-    integer code, dummy, data_from_file; // Used for file I/O intermediate steps
-    integer coeff_from_file; // Intermediate transferring coefficient from file to biquad     
+    int fc, fd, f, fdebug; // File Descriptors for I/O of test
+    int code, dummy, data_from_file; // Used for file I/O intermediate steps
+    int coeff_from_file; // Intermediate transferring coefficient from file to biquad     
     reg [8*10:1] str; // String read from file
+
+    int stim_val;
+    reg [11:0] stim_vals [7:0];
 
     initial begin
         #150;
 
-
-        if (THIS_DESIGN == "BASIC") begin : BASIC_RUN
+        if (THIS_STIM == "FILE") begin : BASIC_RUN
                 // Notch location
             for(int notch=260; notch<1200; notch = notch+5000) begin
 
@@ -257,13 +302,11 @@ module trigger_chain_tb;
                     
                     $monitor("Prepping AGC");
                     
-                    do_write_agc(8'h14, 0); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+                    do_write_agc(8'h14, AGC_offset); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
                     // I believe from other documentation
                     // that scale is a fraction of 4096 (13 bits, 0x1000).
-                    do_write_agc(8'h10, 17'd32); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-                    // Lets put in 32/4096 = 1/128. With a pulse of 512 that becomes 4
-                    // This resulted in a value of 17 (16+1, so 1). I believe this is due to two fractional bits being removed? 
-                    // Specifically, NFRAC_OUT in agc_dsp.sv
+                    do_write_agc(8'h10, AGC_scale); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+
 
                     // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
                     // The first signal here tells the offset and scale to load into the first FF
@@ -352,8 +395,62 @@ module trigger_chain_tb;
                     end
                 end
             end
-        end else begin : DEFAULT_RUN
-            $monitor("THIS_DESIGN set to something other");       
+        end else if (THIS_STIM == "GAUSS_RAND") begin : GAUSS_RAND_RUN
+            $monitor("Prepping AGC");
+                    
+            do_write_agc(8'h14, AGC_offset); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+            // I believe from other documentation
+            // that scale is a fraction of 4096 (13 bits, 0x1000).
+            do_write_agc(8'h10, AGC_scale); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+
+
+            // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
+            // The first signal here tells the offset and scale to load into the first FF
+            // and the second signal applies them via the second FF.
+            do_write_agc(8'h00, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+            do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+
+
+            $monitor("Beginning Random Gaussian Stimulus");
+            for(int clocks=0;clocks<stim_clks;clocks++) begin: CLOCK_IN_LOOP // We are expecting 80064 samples, cut the end
+                #0.01;
+                @(posedge aclk);
+                for(int i=0; i<8; i++) begin: FILL_STIM
+                    do begin
+                        stim_val = $dist_normal(seed, stim_mean, stim_sdev);
+                    end while(stim_val>2047 || stim_val < -2048);
+                    stim_vals[i] = stim_val;
+                end
+                samples = stim_vals;
+            end
+        end else if (THIS_STIM == "SINE") begin : SINE_RUN
+            $monitor("Prepping AGC");
+                    
+            do_write_agc(8'h14, AGC_offset); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+            // I believe from other documentation
+            // that scale is a fraction of 4096 (13 bits, 0x1000).
+            do_write_agc(8'h10, AGC_scale); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+
+
+            // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
+            // The first signal here tells the offset and scale to load into the first FF
+            // and the second signal applies them via the second FF.
+            do_write_agc(8'h00, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+            do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+
+
+            $monitor("Beginning CW Stimulus");
+            for(int clocks=0;clocks<stim_clks;clocks++) begin: CLOCK_IN_LOOP // We are expecting 80064 samples, cut the end
+                #0.01;
+                @(posedge aclk);
+                for(int i=0; i<8; i++) begin: FILL_STIM
+                    real inval = (clocks*8+i) / 100.0;
+                    stim_vals[i]  = $floor(sine_mag*$sin(sine_scale*inval));
+                end
+                samples = stim_vals;
+            end
+        end else begin
+            $monitor("THIS_DESIGN set to something other");     
         end
     end
     
