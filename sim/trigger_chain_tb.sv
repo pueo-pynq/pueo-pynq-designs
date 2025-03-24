@@ -22,7 +22,7 @@ module trigger_chain_tb;
     int seed = 1;
     int stim_mean = 0;
     int stim_sdev = 100; // Note that max value is 2047 (and -2048)
-    int stim_clks = 100007;
+    int stim_clks = 500;//100007;
 
     // Sine scale
     int sine_scale = 1;
@@ -64,11 +64,11 @@ module trigger_chain_tb;
     // For AGC (One channel at first)
     reg [7:0] address_agc = {8{1'b0}};
     reg [31:0] data_agc_o = {32{1'b0}};
-    reg [31:0] data_agc_i = {32{1'b0}};
+    reg [31:0] data_agc_i;// = {32{1'b0}};
     wire ack_agc;
     `DEFINE_WB_IF( wb_agc_ , 8, 32);
     assign wb_agc_dat_o = data_agc_o;
-    assign wb_agc_dat_i = data_agc_i;
+    assign data_agc_i = wb_agc_dat_i;
     assign wb_agc_adr_o = address_agc;
     assign ack_agc = wb_agc_ack_i;
 
@@ -80,10 +80,10 @@ module trigger_chain_tb;
 
     reg use_agc = 0; // QOL tie these together if not ever implementing writing
     reg wr_agc = 0; // QOL tie these together if not ever implementing writing
-    assign wb_agc_cyc_o = wr_agc;
-    assign wb_agc_stb_o = wr_agc;
+    assign wb_agc_cyc_o = use_agc;
+    assign wb_agc_stb_o = use_agc;
     assign wb_agc_we_o = wr_agc; // Tie this in too if only ever writing
-    assign wb_agc_sel_o = {4{wr_agc}};
+    assign wb_agc_sel_o = {4{use_agc}};
 
     task do_write_agc; 
         input [7:0] in_addr;
@@ -101,14 +101,25 @@ module trigger_chain_tb;
     task do_read_agc; 
         input [7:0] in_addr;
         output [31:0] out_data;
-        begin
+        begin 
+            address_agc = in_addr; #1
+            // @(posedge wbclk);
+            // $monitor($sformatf("1Read in %d, outdata %d", data_agc_i, out_data));
+            #1 use_agc = 1; wr_agc = 0;
             @(posedge wbclk);
-            #1 use_agc = 1; wr_agc = 0; address_agc = in_addr;
-            @(posedge wbclk);
+            // $monitor($sformatf("2Read in %d, outdata %d", data_agc_i, out_data));
             while (!ack_agc) #1 @(posedge wbclk);  
             out_data = data_agc_i;
+            // $monitor($sformatf("3Read in %d, outdata %d", data_agc_i, out_data));
             #1 use_agc = 0;
-            while (ack_agc) #1 @(posedge wbclk)
+            
+            // // $monitor($sformatf("4Read in %d, outdata %d", data_agc_i, out_data));
+            // while (ack_agc) begin 
+            //     #1 
+            //     @(posedge wbclk);
+            //    
+            //    // $monitor($sformatf("5Read in %d, outdata %d", data_agc_i, out_data));
+            // end
         end
     endtask
 
@@ -193,6 +204,7 @@ module trigger_chain_tb;
 
     int stim_val;
     reg [11:0] stim_vals [7:0];
+    reg [31:0] read_in_val = 32'd0;
 
     initial begin
         #150;
@@ -449,6 +461,8 @@ module trigger_chain_tb;
                 end
                 samples = stim_vals;
             end
+            $monitor("Ending CW Stimulus");
+            do_read_agc(22'd16, read_in_val); // the 3 address bits select the register to read. Lets get agc_scale at 4
         end else begin
             $monitor("THIS_DESIGN set to something other");     
         end
