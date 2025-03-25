@@ -97,29 +97,16 @@ module trigger_chain_tb;
         end
     endtask
 
-    // TODO: Under development
     task do_read_agc; 
         input [7:0] in_addr;
         output [31:0] out_data;
         begin 
             address_agc = in_addr; #1
-            // @(posedge wbclk);
-            // $monitor($sformatf("1Read in %d, outdata %d", data_agc_i, out_data));
             #1 use_agc = 1; wr_agc = 0;
             @(posedge wbclk);
-            // $monitor($sformatf("2Read in %d, outdata %d", data_agc_i, out_data));
             while (!ack_agc) #1 @(posedge wbclk);  
             out_data = data_agc_i;
-            // $monitor($sformatf("3Read in %d, outdata %d", data_agc_i, out_data));
             #1 use_agc = 0;
-            
-            // // $monitor($sformatf("4Read in %d, outdata %d", data_agc_i, out_data));
-            // while (ack_agc) begin 
-            //     #1 
-            //     @(posedge wbclk);
-            //    
-            //    // $monitor($sformatf("5Read in %d, outdata %d", data_agc_i, out_data));
-            // end
         end
     endtask
 
@@ -205,6 +192,7 @@ module trigger_chain_tb;
     int stim_val;
     reg [11:0] stim_vals [7:0];
     reg [31:0] read_in_val = 32'd0;
+    reg [24:0] agc_sq = 25'd0;
 
     initial begin
         #150;
@@ -451,8 +439,11 @@ module trigger_chain_tb;
             do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
 
 
+            do_write_agc(8'h00, 12'h004); // Reset AGC
+            do_write_agc(8'h00, 12'h001); // Start running AGC measurement cycle
+
             $monitor("Beginning CW Stimulus");
-            for(int clocks=0;clocks<stim_clks;clocks++) begin: CLOCK_IN_LOOP // We are expecting 80064 samples, cut the end
+            for(int clocks=0;clocks<10000000;clocks++) begin: CLOCK_IN_LOOP // We are expecting 80064 samples, cut the end
                 #0.01;
                 @(posedge aclk);
                 for(int i=0; i<8; i++) begin: FILL_STIM
@@ -460,9 +451,26 @@ module trigger_chain_tb;
                     stim_vals[i]  = $floor(sine_mag*$sin(sine_scale*inval));
                 end
                 samples = stim_vals;
+                do_read_agc(22'd00, read_in_val); // see if AGC is done
+                if(read_in_val) begin: agc_ready
+                    read_in_val = 32'd0;
+                    do_read_agc(22'd04, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 
+                    agc_sq = {{17{1'd0}},{agc_sq[24:17]}};// agc_sq/131072, equvalent to a shift of 17
+                    do_write_agc(8'h00, 12'h004); // Reset AGC
+                    do_write_agc(8'h00, 12'h001); // Start running AGC measurement cycle
+                end
+
+                // RESULTS OF THE ABOVE WERE A SUCCESS, an rms of 11 was measured (approx expected)
+            
+                // TODO: Check here for complete AGC.
+                // TODO: Probably want a loop around this all updating and then dropping back in
             end
+            //             I think 4 is sq_accum_reg [8,4,2X,1X]
+            
+            do_read_agc(22'd04, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 4
+            
             $monitor("Ending CW Stimulus");
-            do_read_agc(22'd16, read_in_val); // the 3 address bits select the register to read. Lets get agc_scale at 4
+            
         end else begin
             $monitor("THIS_DESIGN set to something other");     
         end
