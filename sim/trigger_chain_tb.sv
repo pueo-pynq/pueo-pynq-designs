@@ -11,7 +11,7 @@ module trigger_chain_tb;
     // Biquad Parameters
     int notch = 650;
     int Q = 8;        
-    localparam int GAUSS_NOISE_SIZE = 1000;
+    localparam int GAUSS_NOISE_SIZE = 200;
 
     // AGC Parameters
     int AGC_offset = 0;
@@ -24,7 +24,7 @@ module trigger_chain_tb;
     // Gaussian Random Parameters
     int seed = 1;
     int stim_mean = 0;
-    int stim_sdev = 100; // Note that max value is 2047 (and -2048)
+    int stim_sdev = 50; // Note that max value is 2047 (and -2048)
     // int stim_clks = 500;//100007;
 
     // Sine scale
