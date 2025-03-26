@@ -5,7 +5,9 @@
 // 1) Shannon-Whitaker low pass filter
 // 2) Two Biquads in serial (to be used as notches)
 // TODO Make fixed point parameterizable
-module trigger_chain_design(        
+module trigger_chain_design #(parameter TIMESCALE_REDUCTION = 4)(  
+
+
         input wb_clk_i,
         input wb_rst_i,
 
@@ -72,7 +74,8 @@ module trigger_chain_design(
         .probes(probe_to_nowhere[0])
     );
 
-    agc_design_minimal u_agc_design_minimal(
+    agc_design_minimal #(.TIMESCALE_REDUCTION(TIMESCALE_REDUCTION))
+     u_agc_design_minimal(
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),        
         `CONNECT_WBS_IFS( wb_ , wb_agc_ ),

@@ -11,6 +11,7 @@
                   parameter OBITS=5,
                   parameter SQ_BITS=25,
                   parameter PR_BITS=21,
+                  parameter TIMESCALE_REDUCTION=1,
                   parameter CLKTYPE="NONE")(
         input clk_i,
         // data inputs
@@ -50,7 +51,7 @@
     // absolute value for RMS *after* mux
     wire [OBITS-2:0] abs_val_mux;
     // Reset value for square accumulator
-    localparam [SQ_BITS-1:0] SQ_OFFSET = 16384;
+    localparam [SQ_BITS-1:0] SQ_OFFSET = 16384/TIMESCALE_REDUCTION;
     
     // probit accumulator
     probit_accumulator #(.NBITS(PR_BITS),

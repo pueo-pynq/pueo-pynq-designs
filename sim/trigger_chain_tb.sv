@@ -3,7 +3,10 @@
 module trigger_chain_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "SINE";//"GAUSS_RAND";
+    parameter       THIS_STIM   = "GAUSS_RAND";//"SINE";//"GAUSS_RAND";
+    parameter TIMESCALE_REDUCTION_BITS = 4; // Make the AGC period easier to simulate
+    parameter TARGET_RMS = 4;
+    parameter K_P = -50.0;//-1.0/256;
 
     // Biquad Parameters
     int notch = 650;
@@ -22,7 +25,7 @@ module trigger_chain_tb;
     int seed = 1;
     int stim_mean = 0;
     int stim_sdev = 100; // Note that max value is 2047 (and -2048)
-    int stim_clks = 500;//100007;
+    // int stim_clks = 500;//100007;
 
     // Sine scale
     int sine_scale = 1;
@@ -160,7 +163,8 @@ module trigger_chain_tb;
     
     if (THIS_DESIGN == "BASIC") begin : BASIC
 
-        trigger_chain_design u_chain(
+        trigger_chain_design #(.TIMESCALE_REDUCTION(2**TIMESCALE_REDUCTION_BITS))
+         u_chain(
             .wb_clk_i(wbclk),
             .wb_rst_i(1'b0),
             `CONNECT_WBS_IFM( wb_ , wb_ ),
@@ -193,8 +197,56 @@ module trigger_chain_tb;
     reg [11:0] stim_vals [7:0];
     reg [31:0] read_in_val = 32'd0;
     reg [24:0] agc_sq = 25'd0;
+    real agc_sqrt = 0;
+    real agc_scale_err = 0;
 
-    initial begin
+
+    // AGC cycle
+    initial begin : AGC_LOOP
+        $monitor("Prepping AGC");
+                    
+        do_write_agc(8'h14, AGC_offset); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+        // I believe from other documentation
+        // that scale is a fraction of 4096 (13 bits, 0x1000).
+        do_write_agc(8'h10, AGC_scale); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+
+        // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
+        // The first signal here tells the offset and scale to load into the first FF
+        // and the second signal applies them via the second FF.
+        do_write_agc(8'h00, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+        do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+
+        #200;
+        do_write_agc(8'h00, 12'h004); // Reset AGC
+        do_write_agc(8'h00, 12'h001); // Start running AGC measurement cycle
+
+        forever begin
+            #0.01;
+            // Check for complete AGC cycle
+            do_read_agc(22'd00, read_in_val); // see if AGC is done
+            if(read_in_val) begin: agc_ready
+                do_read_agc(22'd04, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 
+                agc_sq = {{(17-TIMESCALE_REDUCTION_BITS){1'd0}},{agc_sq[24:17-TIMESCALE_REDUCTION_BITS]}};// agc_sq/131072, equvalent to a shift of 17
+                agc_sqrt = $sqrt(agc_sq);
+                agc_scale_err = agc_sqrt - TARGET_RMS;
+                AGC_scale = $floor(AGC_scale + agc_scale_err * K_P);
+                do_write_agc(8'h10, AGC_scale);
+                do_write_agc(8'h00, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+                do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+
+
+                do_write_agc(8'h00, 12'h004); // Reset AGC
+                do_write_agc(8'h00, 12'h001); // Start running AGC measurement cycle
+                read_in_val = 32'd0;
+            end 
+        end
+
+    end
+
+
+    // Stimulus
+    int clocks = 0;
+    initial begin: STIM_LOOP
         #150;
 
         if (THIS_STIM == "FILE") begin : BASIC_RUN
@@ -396,26 +448,12 @@ module trigger_chain_tb;
                 end
             end
         end else if (THIS_STIM == "GAUSS_RAND") begin : GAUSS_RAND_RUN
-            $monitor("Prepping AGC");
-                    
-            do_write_agc(8'h14, AGC_offset); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-            // I believe from other documentation
-            // that scale is a fraction of 4096 (13 bits, 0x1000).
-            do_write_agc(8'h10, AGC_scale); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-
-
-            // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
-            // The first signal here tells the offset and scale to load into the first FF
-            // and the second signal applies them via the second FF.
-            do_write_agc(8'h00, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-            do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-
 
             $monitor("Beginning Random Gaussian Stimulus");
-            for(int clocks=0;clocks<stim_clks;clocks++) begin: CLOCK_IN_LOOP // We are expecting 80064 samples, cut the end
+            forever begin: FILL_STIM_GAUSS // We are expecting 80064 samples, cut the end
                 #0.01;
                 @(posedge aclk);
-                for(int i=0; i<8; i++) begin: FILL_STIM
+                for(int i=0; i<8; i++) begin: FILL_STIM_GAUSS
                     do begin
                         stim_val = $dist_normal(seed, stim_mean, stim_sdev);
                     end while(stim_val>2047 || stim_val < -2048);
@@ -424,52 +462,20 @@ module trigger_chain_tb;
                 samples = stim_vals;
             end
         end else if (THIS_STIM == "SINE") begin : SINE_RUN
-            $monitor("Prepping AGC");
-                    
-            do_write_agc(8'h14, AGC_offset); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-            // I believe from other documentation
-            // that scale is a fraction of 4096 (13 bits, 0x1000).
-            do_write_agc(8'h10, AGC_scale); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-
-
-            // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
-            // The first signal here tells the offset and scale to load into the first FF
-            // and the second signal applies them via the second FF.
-            do_write_agc(8'h00, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-            do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-
-
-            do_write_agc(8'h00, 12'h004); // Reset AGC
-            do_write_agc(8'h00, 12'h001); // Start running AGC measurement cycle
-
+    
             $monitor("Beginning CW Stimulus");
-            for(int clocks=0;clocks<10000000;clocks++) begin: CLOCK_IN_LOOP // We are expecting 80064 samples, cut the end
+            forever begin: CLOCK_IN_LOOP_SINE // We are expecting 80064 samples, cut the end
                 #0.01;
                 @(posedge aclk);
-                for(int i=0; i<8; i++) begin: FILL_STIM
+                for(int i=0; i<8; i++) begin: FILL_STIM_SINE
                     real inval = (clocks*8+i) / 100.0;
                     stim_vals[i]  = $floor(sine_mag*$sin(sine_scale*inval));
                 end
                 samples = stim_vals;
-                do_read_agc(22'd00, read_in_val); // see if AGC is done
-                if(read_in_val) begin: agc_ready
-                    read_in_val = 32'd0;
-                    do_read_agc(22'd04, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 
-                    agc_sq = {{17{1'd0}},{agc_sq[24:17]}};// agc_sq/131072, equvalent to a shift of 17
-                    do_write_agc(8'h00, 12'h004); // Reset AGC
-                    do_write_agc(8'h00, 12'h001); // Start running AGC measurement cycle
-                end
-
-                // RESULTS OF THE ABOVE WERE A SUCCESS, an rms of 11 was measured (approx expected)
-            
-                // TODO: Check here for complete AGC.
-                // TODO: Probably want a loop around this all updating and then dropping back in
+                clocks = clocks+1;
             end
             //             I think 4 is sq_accum_reg [8,4,2X,1X]
-            
-            do_read_agc(22'd04, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 4
-            
-            $monitor("Ending CW Stimulus");
+            $monitor("Ending CW Stimulus (how did this even happen?)");
             
         end else begin
             $monitor("THIS_DESIGN set to something other");     

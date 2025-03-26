@@ -14,6 +14,7 @@ module agc_design_minimal(
     
     parameter WBCLKTYPE = "PSCLK";
     parameter CLKTYPE = "ACLK";
+    parameter TIMESCALE_REDUCTION = 4; // Make the AGC period easier to simulate
     
     // Outputs of the AGC core
     wire [20:0] gt_accum_out; // Greater than accumulator   
@@ -182,7 +183,7 @@ module agc_design_minimal(
     always @(posedge aclk) agc_done_delay <= { agc_done_delay[4:0], agc_time_done };
     assign agc_done_aclk = agc_done_delay[5];
     dsp_counter_terminal_count #(.FIXED_TCOUNT("TRUE"),
-                                 .FIXED_TCOUNT_VALUE(131072),
+                                 .FIXED_TCOUNT_VALUE(131072/TIMESCALE_REDUCTION),
                                  .HALT_AT_TCOUNT("TRUE"))
             u_agc_timer(.clk_i(aclk),
                         .rst_i(agc_tick_aclk),
@@ -191,7 +192,7 @@ module agc_design_minimal(
 
 
     //wire [39:0] agc_out;
-    agc_core #(.CLKTYPE(CLKTYPE)) u_agc0( .clk_i(aclk),
+    agc_core #(.CLKTYPE(CLKTYPE), .TIMESCALE_REDUCTION(TIMESCALE_REDUCTION)) u_agc0( .clk_i(aclk),
                      .rf_dat_i(dat_i),
                      .rf_dat_o(dat_o),
                      .sq_accum_o(sq_accum_out),
