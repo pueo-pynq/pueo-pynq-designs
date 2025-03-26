@@ -6,7 +6,8 @@ module trigger_chain_tb;
     parameter       THIS_STIM   = "GAUSS_RAND";//"SINE";//"GAUSS_RAND";
     parameter TIMESCALE_REDUCTION_BITS = 4; // Make the AGC period easier to simulate
     parameter TARGET_RMS = 4;
-    parameter K_P = -50.0;//-1.0/256;
+    parameter K_scale_P = -50.0;//-1.0/256;
+    parameter K_offset_P = -1.0/64;//-1.0/256;
 
     // Biquad Parameters
     int notch = 650;
@@ -16,15 +17,15 @@ module trigger_chain_tb;
     // AGC Parameters
     int AGC_offset = 0;
 
-    int AGC_scale = 1024;
+    int AGC_scale = 4096;//1024;
     // For a scale value of 32, 32/4096 = 1/128. With a pulse of 512 that becomes 4
     // This resulted in a value of 17 (16+1, so 1). I believe this is due to two fractional bits being removed? Maybe 3, with rounding.
     // Specifically, NFRAC_OUT in agc_dsp.sv
 
     // Gaussian Random Parameters
     int seed = 1;
-    int stim_mean = 0;
-    int stim_sdev = 50; // Note that max value is 2047 (and -2048)
+    int stim_mean = 80;
+    int stim_sdev = 100; // Note that max value is 2047 (and -2048)
     // int stim_clks = 500;//100007;
 
     // Sine scale
@@ -199,6 +200,9 @@ module trigger_chain_tb;
     reg [24:0] agc_sq = 25'd0;
     real agc_sqrt = 0;
     real agc_scale_err = 0;
+    int agc_gt = 0;
+    int agc_lt = 0;
+    int agc_offset_err = 0;
 
 
     // AGC cycle
@@ -225,12 +229,17 @@ module trigger_chain_tb;
             // Check for complete AGC cycle
             do_read_agc(22'd00, read_in_val); // see if AGC is done
             if(read_in_val) begin: agc_ready
-                do_read_agc(22'd04, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 
+                do_read_agc(22'h04, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 
+                do_read_agc(22'h08, agc_gt); // the 3 address bits select the register to read. Lets get agc_scale at 
+                do_read_agc(22'h0c, agc_lt); // the 3 address bits select the register to read. Lets get agc_scale at 
                 agc_sq = {{(17-TIMESCALE_REDUCTION_BITS){1'd0}},{agc_sq[24:17-TIMESCALE_REDUCTION_BITS]}};// agc_sq/131072, equvalent to a shift of 17
                 agc_sqrt = $sqrt(agc_sq);
                 agc_scale_err = agc_sqrt - TARGET_RMS;
-                AGC_scale = $floor(AGC_scale + agc_scale_err * K_P);
+                agc_offset_err = agc_gt-agc_lt;
+                AGC_scale = $floor(AGC_scale + agc_scale_err * K_scale_P);
+                AGC_offset = $floor(AGC_offset + agc_offset_err * K_offset_P);
                 do_write_agc(8'h10, AGC_scale);
+                do_write_agc(8'h14, AGC_offset);
                 do_write_agc(8'h00, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
                 do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
 
