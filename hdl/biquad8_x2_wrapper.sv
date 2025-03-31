@@ -3,7 +3,7 @@
 
 // Two biquads in serial, with coefficients loaded in by wishbone interface
 // TODO Make Fixed point parameterizable
-module biquad8_double_design(
+module biquad8_x2_wrapper(
         input wb_clk_i,
         input wb_rst_i,
         `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ),      // Address width, data width    

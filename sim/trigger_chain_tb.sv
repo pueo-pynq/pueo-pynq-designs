@@ -7,7 +7,7 @@ module trigger_chain_tb;
     parameter TIMESCALE_REDUCTION_BITS = 4; // Make the AGC period easier to simulate
     parameter TARGET_RMS = 4;
     parameter K_scale_P = -50.0;//-1.0/256;
-    parameter K_offset_P = -1.0/64;//-1.0/256;
+    parameter K_offset_P = -1.0/8;//-1.0/256;
 
     // Biquad Parameters
     int notch = 650;

@@ -63,7 +63,7 @@ module trigger_chain_design #(parameter TIMESCALE_REDUCTION = 4)(
 
     // Biquads
 
-    biquad8_double_design u_biquadx2(
+    biquad8_x2_wrapper u_biquadx2(
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),        
         `CONNECT_WBS_IFS( wb_ , wb_ ),
@@ -74,8 +74,8 @@ module trigger_chain_design #(parameter TIMESCALE_REDUCTION = 4)(
         .probes(probe_to_nowhere[0])
     );
 
-    agc_design_minimal #(.TIMESCALE_REDUCTION(TIMESCALE_REDUCTION))
-     u_agc_design_minimal(
+    agc_wrapper #(.TIMESCALE_REDUCTION(TIMESCALE_REDUCTION))
+     u_agc_wrapper(
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),        
         `CONNECT_WBS_IFS( wb_ , wb_agc_ ),
