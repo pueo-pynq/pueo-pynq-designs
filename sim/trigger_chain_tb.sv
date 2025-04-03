@@ -6,6 +6,10 @@ module trigger_chain_tb;
     parameter       THIS_STIM   = "GAUSS_RAND";//"SINE";//"GAUSS_RAND";
     parameter TIMESCALE_REDUCTION_BITS = 4; // Make the AGC period easier to simulate
     parameter TARGET_RMS = 4;
+
+    // PID control values. Note that this controller implementation cumulatively adds the output here
+    // to the values. Other implementations therefore call this value "I". In a sense this is "P" for
+    // the first derivative.
     parameter K_scale_P = -50.0;//-1.0/256;
     parameter K_offset_P = -1.0/8;//-1.0/256;
 
@@ -157,10 +161,10 @@ module trigger_chain_tb;
         end
     endgenerate
 
-    // Biquad reset
-   reg bq_reset_reg = 1'b0;
-   wire bq_reset;
-   assign bq_reset = bq_reset_reg;
+    // Reset
+   reg reset_reg = 1'b0;
+   wire reset;
+   assign reset = reset_reg;
     
     if (THIS_DESIGN == "BASIC") begin : BASIC
 
@@ -170,11 +174,10 @@ module trigger_chain_tb;
             .wb_rst_i(1'b0),
             `CONNECT_WBS_IFM( wb_ , wb_ ),
             `CONNECT_WBS_IFM( wb_agc_ , wb_agc_ ),
-            .reset_i(bq_reset), 
+            .reset_i(reset), 
             .aclk(aclk),
             .dat_i(sample_arr),
-            .dat_o(outsample_arr),
-            .probes(probe0_arr));
+            .dat_o(outsample_arr));
 
     end else begin : DEFAULT // Currently the same as "BASIC"
         trigger_chain_design u_chain(
@@ -182,11 +185,10 @@ module trigger_chain_tb;
             .wb_rst_i(1'b0),
             `CONNECT_WBS_IFM( wb_ , wb_ ),
             `CONNECT_WBS_IFM( wb_agc_ , wb_agc_ ),
-            .reset_i(bq_reset), 
+            .reset_i(reset), 
             .aclk(aclk),
             .dat_i(sample_arr),
-            .dat_o(outsample_arr),
-            .probes(probe0_arr));
+            .dat_o(outsample_arr));
     end
 
     int fc, fd, f, fdebug; // File Descriptors for I/O of test
@@ -200,6 +202,7 @@ module trigger_chain_tb;
     reg [24:0] agc_sq = 25'd0;
     real agc_sqrt = 0;
     real agc_scale_err = 0;
+    int agc_scale_err_int = 0;
     int agc_gt = 0;
     int agc_lt = 0;
     int agc_offset_err = 0;
@@ -235,6 +238,7 @@ module trigger_chain_tb;
                 agc_sq = {{(17-TIMESCALE_REDUCTION_BITS){1'd0}},{agc_sq[24:17-TIMESCALE_REDUCTION_BITS]}};// agc_sq/131072, equvalent to a shift of 17
                 agc_sqrt = $sqrt(agc_sq);
                 agc_scale_err = agc_sqrt - TARGET_RMS;
+                agc_scale_err_int = agc_scale_err*7000000;
                 agc_offset_err = agc_gt-agc_lt;
                 AGC_scale = $floor(AGC_scale + agc_scale_err * K_scale_P);
                 AGC_offset = $floor(AGC_offset + agc_offset_err * K_offset_P);
@@ -407,12 +411,12 @@ module trigger_chain_tb;
                     end
 
                     // Biquad reset
-                    bq_reset_reg = 1'b1;
+                    reset_reg = 1'b1;
                     for(int clocks=0;clocks<32;clocks++) begin
                         @(posedge aclk);
                         #0.01;
                     end
-                    bq_reset_reg = 1'b0;
+                    reset_reg = 1'b0;
 
                     $fclose(fd);
                     $fclose(fdebug);
@@ -444,12 +448,12 @@ module trigger_chain_tb;
                         end
 
                         // Biquad reset
-                        bq_reset_reg = 1'b1;
+                        reset_reg = 1'b1;
                         for(int clocks=0;clocks<32;clocks++) begin
                             @(posedge aclk);
                             #0.01;
                         end
-                        bq_reset_reg = 1'b0;
+                        reset_reg = 1'b0;
                         $fclose(fd);
                         $fclose(fdebug);
                         $fclose(f);

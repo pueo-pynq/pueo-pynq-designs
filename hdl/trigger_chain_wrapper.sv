@@ -4,15 +4,15 @@
 // Pre-trigger filter chain.
 // 1) Shannon-Whitaker low pass filter
 // 2) Two Biquads in serial (to be used as notches)
-// TODO Make fixed point parameterizable
-module trigger_chain_design #(parameter TIMESCALE_REDUCTION = 4)(  
+// 3) AGC and 12->5 bit conversion
+module trigger_chain_wrapper #(parameter AGC_TIMESCALE_REDUCTION = 4)(  
 
 
         input wb_clk_i,
         input wb_rst_i,
 
         // Wishbone stuff for writing in coefficients to the biquads
-        `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ), // Address width, data width. Address is at size limit
+        `TARGET_NAMED_PORTS_WB_IF( wb_bq_ , 22, 32 ), // Address width, data width. Address is at size limit
 
         // Wishbone stuff for writing to the AGC
         `TARGET_NAMED_PORTS_WB_IF( wb_agc_ , 22, 32 ), // Address width, data width. Address is at size limit
@@ -22,8 +22,7 @@ module trigger_chain_design #(parameter TIMESCALE_REDUCTION = 4)(
         input aclk,
         input [95:0] dat_i,
         
-        output [39:0] dat_o,
-        output [95:0] probes
+        output [39:0] dat_o
     );
 
     // QUALITY OF LIFE FUNCTIONS
@@ -58,7 +57,6 @@ module trigger_chain_design #(parameter TIMESCALE_REDUCTION = 4)(
                                         .in_i(dat_i),
                                         .out_o(data_stage_connection[0]));
 
-    assign probes = data_stage_connection[0];
     wire [95:0] probe_to_nowhere[1:0];
 
     // Biquads
@@ -70,11 +68,10 @@ module trigger_chain_design #(parameter TIMESCALE_REDUCTION = 4)(
         .reset_BQ_i(reset_i),
         .aclk(aclk),
         .dat_i(data_stage_connection[0]),
-        .dat_o(data_stage_connection[1]),
-        .probes(probe_to_nowhere[0])
+        .dat_o(data_stage_connection[1])
     );
 
-    agc_wrapper #(.TIMESCALE_REDUCTION(TIMESCALE_REDUCTION))
+    agc_wrapper #(.TIMESCALE_REDUCTION(AGC_TIMESCALE_REDUCTION))
      u_agc_wrapper(
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),        
@@ -83,8 +80,7 @@ module trigger_chain_design #(parameter TIMESCALE_REDUCTION = 4)(
         .aresetn(reset_i),
         .dat_i(dat_i),//(data_stage_connection[1]),
         
-        .dat_o(dat_o),
-        .probes(probe_to_nowhere[1])
+        .dat_o(dat_o)
     );
 
 

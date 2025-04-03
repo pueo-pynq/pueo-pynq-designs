@@ -11,8 +11,7 @@ module biquad8_x2_wrapper(
         input aclk,
         input [95:0] dat_i,
         
-        output [95:0] dat_o,
-        output [95:0] probes
+        output [95:0] dat_o
     );
 
     // // UNPACK is 128 -> 96
@@ -63,7 +62,6 @@ module biquad8_x2_wrapper(
     // these are the outputs
     wire [95:0] bq_out[1:0];
     assign dat_o = bq_out[1];
-    // assign probes[21:0] = wb_adr_i;
     
     
     biquad8_wrapper #(.NBITS(12),

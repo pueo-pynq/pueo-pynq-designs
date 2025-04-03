@@ -3,7 +3,7 @@
 module agc_wrapper(
         input wb_clk_i,
         input wb_rst_i,
-        `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ),
+        `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ), //address then data width
         input aclk,
         input aresetn, // TODO: Unused?
         input [95:0] dat_i,
