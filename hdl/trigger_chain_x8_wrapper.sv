@@ -2,8 +2,7 @@
 `include "interfaces.vh"
 
 // Check whether the bits selecting the channel match the value
-// TODO FIXME for multiple ADDR locations
-`define CHAN_ADDR_MATCH( in, val ) ( {in[10:8], 8'b00000000} == val)
+`define ADDR_MATCH( addr, val, mask ) ( ( addr & mask ) == (val & mask) )
 
 // 8 channels of trigger chain, with wisbone interconnect
 module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(  
@@ -51,18 +50,37 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
 
     // This may be completely unnecessary due to the loop already differentiating the channels
     `define CHAN_NUM ( n ) _``n``_ 
-    localparam [21:0] CHAN_MASK = 22'h000000;
+    localparam [10:0] CHAN_MASK = 11'h700; //0111 0000 0000
+
+    // Connect the WB outputs
+    wire wb_idx = wb_adr_i[10:8];
 
     wire        wb_bq_ack_o_vec [7:0];
     wire        wb_bq_err_o_vec [7:0];
     wire        wb_bq_rty_o_vec [7:0];
     wire [31:0] wb_bq_dat_o_vec [7:0];
 
+    assign wb_bq_ack_o = wb_bq_ack_o_vec[wb_idx];
+    assign wb_bq_err_o = wb_bq_err_o_vec[wb_idx];
+    assign wb_bq_rty_o = wb_bq_rty_o_vec[wb_idx];
+    assign wb_bq_dat_o = wb_bq_dat_o_vec[wb_idx];
+    
+    wire        wb_agc_ack_o_vec [7:0];
+    wire        wb_agc_err_o_vec [7:0];
+    wire        wb_agc_rty_o_vec [7:0];
+    wire [31:0] wb_agc_dat_o_vec [7:0];
+
+    assign wb_agc_ack_o = wb_agc_ack_o_vec[wb_idx];
+    assign wb_agc_err_o = wb_agc_err_o_vec[wb_idx];
+    assign wb_agc_rty_o = wb_agc_rty_o_vec[wb_idx];
+    assign wb_agc_dat_o = wb_agc_dat_o_vec[wb_idx];
+
+    // Connect the AGC inputs
     genvar idx;
     generate
         for(idx = 0; i<8; i = i+1) begin : TRIGGER_CHAIN_LOOP
-            `DEFINE_WB_IF( wb_bq`CHAN_NUM(idx), 7, 32);
-            `DEFINE_WB_IF( wb_agc`CHAN_NUM(idx), 21, 32);
+            `DEFINE_WB_IF( wb_bq`CHAN_NUM(idx), 8, 32);
+            `DEFINE_WB_IF( wb_agc`CHAN_NUM(idx), 8, 32);
 
             assign wb_bq_ack_o_vec[idx] = wb_bq`CHAN_NUM(idx)ack_o;
             assign wb_bq_err_o_vec[idx] = wb_bq`CHAN_NUM(idx)err_o;
@@ -70,19 +88,18 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
             assign wb_bq_dat_o_vec[idx] = wb_bq`CHAN_NUM(idx)dat_o;
 
             // The cyc signal controls whether anything happens
-            assign wb_bq`CHAN_NUM(idx)cyc_o = wb_agc_cyc_i && CHAN_ADDR_MATCH(wb_bq_adr_i, idx * 10'h100);
+            assign wb_bq`CHAN_NUM(idx)cyc_o = wb_bq_cyc_i && CHAN_ADDR_MATCH(wb_bq_adr_i, idx * 11'h100, CHAN_MASK);
             assign wb_bq`CHAN_NUM(idx)stb_o = wb_bq_stb_i;
-            assign wb_bq`CHAN_NUM(idx)adr_o = wb_bq_adr_i[6:0];
+            assign wb_bq`CHAN_NUM(idx)adr_o = wb_bq_adr_i[7:0];
             assign wb_bq`CHAN_NUM(idx)dat_o = wb_bq_dat_i;
             assign wb_bq`CHAN_NUM(idx)we_o  = wb_bq_we_i;
             assign wb_bq`CHAN_NUM(idx)sel_o = wb_bq_sel_i;
 
 
             // The cyc signal controls whether anything happens
-            // TODO FIXME
-            assign wb_agc`CHAN_NUM(idx)cyc_o = wb_agc_cyc_i && CHAN_ADDR_MATCH(wb_agc_adr_i, idx * 10'h100)// TOO LOW OF BITS;
+            assign wb_agc`CHAN_NUM(idx)cyc_o = wb_agc_cyc_i && CHAN_ADDR_MATCH(wb_agc_adr_i, idx * 11'h100, CHAN_MASK)
             assign wb_agc`CHAN_NUM(idx)stb_o = wb_agc_stb_i;
-            assign wb_agc`CHAN_NUM(idx)adr_o = wb_agc_adr_i[21:0];
+            assign wb_agc`CHAN_NUM(idx)adr_o = wb_agc_adr_i[7:0];
             assign wb_agc`CHAN_NUM(idx)dat_o = wb_agc_dat_i;
             assign wb_agc`CHAN_NUM(idx)we_o  = wb_agc_we_i;
             assign wb_agc`CHAN_NUM(idx)sel_o = wb_agc_sel_i;
@@ -105,4 +122,4 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
 endmodule
 
 `undef CHAN_NUM
-`undef ADDR_MATCH_MASK
+`undef ADDR_MASK

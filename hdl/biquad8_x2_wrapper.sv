@@ -6,7 +6,8 @@
 module biquad8_x2_wrapper(
         input wb_clk_i,
         input wb_rst_i,
-        `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ),      // Address width, data width    
+                                                    // Using [7:2] of address space
+        `TARGET_NAMED_PORTS_WB_IF( wb_ , 8, 32 ),  // Address width, data width    
         input reset_BQ_i,
         input aclk,
         input [95:0] dat_i,

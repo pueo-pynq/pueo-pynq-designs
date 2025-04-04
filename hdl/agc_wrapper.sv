@@ -3,7 +3,8 @@
 module agc_wrapper(
         input wb_clk_i,
         input wb_rst_i,
-        `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ), //address then data width
+                                                    // using [4:2] of address space (mask 0x1C)
+        `TARGET_NAMED_PORTS_WB_IF( wb_ , 8, 32 ),  //address then data width
         input aclk,
         input aresetn, // TODO: Unused?
         input [95:0] dat_i,
@@ -76,7 +77,7 @@ module agc_wrapper(
     `define ADDR_MATCH( addr, val, mask ) ( ( addr & mask ) == (val & mask) )
 
     // pick off bits [4:2]
-    localparam [21:0] AGC_MASK = 22'h00001C;
+    localparam [7:0] AGC_MASK = 8'h1C;
     
     wire [31:0] register_data[7:0];
     // BIT 0 = agc_tick
@@ -114,11 +115,11 @@ module agc_wrapper(
             sq_accum_reg <= sq_accum_out;
         end            
 
-        req_agc_tick <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 22'h0, AGC_MASK ) && wb_we_i && wb_sel_i[0] && wb_dat_i[0]);
-        agc_reset <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 22'h0, AGC_MASK ) && wb_we_i && wb_sel_i[0] && wb_dat_i[2]);
-        agc_scale_load <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 22'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[8]);
-        agc_offset_load <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 22'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[9]);
-        agc_apply <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 22'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[10]);
+        req_agc_tick <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 8'h0, AGC_MASK ) && wb_we_i && wb_sel_i[0] && wb_dat_i[0]);
+        agc_reset <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 8'h0, AGC_MASK ) && wb_we_i && wb_sel_i[0] && wb_dat_i[2]);
+        agc_scale_load <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 8'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[8]);
+        agc_offset_load <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 82'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[9]);
+        agc_apply <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 8'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[10]);
     
         // THIS IS SO DUMB I DON'T REALLY NEED TO WAIT
         case (state)
@@ -136,12 +137,12 @@ module agc_wrapper(
         if (state == READ) register_hold <= register_data[wb_adr_i[4:2]];
         // SO DUMB
         if (state == WRITE) begin
-            if (`ADDR_MATCH(wb_adr_i, 22'h10, AGC_MASK)) begin
+            if (`ADDR_MATCH(wb_adr_i, 8'h10, AGC_MASK)) begin
                 if (wb_sel_i[0]) agc_scale[7:0] <= wb_dat_i[7:0];
                 if (wb_sel_i[1]) agc_scale[15:8] <= wb_dat_i[15:8];
                 if (wb_sel_i[2]) agc_scale[16] <= wb_dat_i[16];
             end
-            if (`ADDR_MATCH(wb_adr_i, 22'h14, AGC_MASK)) begin
+            if (`ADDR_MATCH(wb_adr_i, 8'h14, AGC_MASK)) begin
                 if (wb_sel_i[0]) agc_offset[7:0] <= wb_dat_i[7:0];
                 if (wb_sel_i[1]) agc_offset[15:8] <= wb_dat_i[15:8];
             end                

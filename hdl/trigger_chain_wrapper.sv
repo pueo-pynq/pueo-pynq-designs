@@ -12,10 +12,10 @@ module trigger_chain_wrapper #(parameter AGC_TIMESCALE_REDUCTION = 4)(
         input wb_rst_i,
 
         // Wishbone stuff for writing in coefficients to the biquads
-        `TARGET_NAMED_PORTS_WB_IF( wb_bq_ , 22, 32 ), // Address width, data width. Address is at size limit
+        `TARGET_NAMED_PORTS_WB_IF( wb_bq_ , 8, 32 ), // Address width, data width. 
 
         // Wishbone stuff for writing to the AGC
-        `TARGET_NAMED_PORTS_WB_IF( wb_agc_ , 22, 32 ), // Address width, data width. Address is at size limit
+        `TARGET_NAMED_PORTS_WB_IF( wb_agc_ , 8, 32 ), // Address width, data width.
         
         // Control to capture the output to the RAM buffer
         input reset_i, 
@@ -64,7 +64,7 @@ module trigger_chain_wrapper #(parameter AGC_TIMESCALE_REDUCTION = 4)(
     biquad8_x2_wrapper u_biquadx2(
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),        
-        `CONNECT_WBS_IFS( wb_ , wb_ ),
+        `CONNECT_WBS_IFS( wb_ , wb_bq_ ),
         .reset_BQ_i(reset_i),
         .aclk(aclk),
         .dat_i(data_stage_connection[0]),
