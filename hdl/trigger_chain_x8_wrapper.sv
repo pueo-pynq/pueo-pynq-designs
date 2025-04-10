@@ -48,68 +48,92 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
         end
     endfunction    
 
-    // This may be completely unnecessary due to the loop already differentiating the channels
-    `define CHAN_NUM ( n ) _``n``_ 
-    localparam [10:0] CHAN_MASK = 11'h700; //0111 0000 0000
+
+    localparam [21:0] CHAN_MASK = 22'h700; //0111 0000 0000
 
     // Connect the WB outputs
-    wire wb_idx = wb_adr_i[10:8];
+    wire [2:0] wb_bq_idx = wb_bq_adr_i[10:8];
 
     wire        wb_bq_ack_o_vec [7:0];
     wire        wb_bq_err_o_vec [7:0];
     wire        wb_bq_rty_o_vec [7:0];
     wire [31:0] wb_bq_dat_o_vec [7:0];
 
-    assign wb_bq_ack_o = wb_bq_ack_o_vec[wb_idx];
-    assign wb_bq_err_o = wb_bq_err_o_vec[wb_idx];
-    assign wb_bq_rty_o = wb_bq_rty_o_vec[wb_idx];
-    assign wb_bq_dat_o = wb_bq_dat_o_vec[wb_idx];
+    assign wb_bq_ack_o = wb_bq_ack_o_vec[wb_bq_idx];
+    assign wb_bq_err_o = wb_bq_err_o_vec[wb_bq_idx];
+    assign wb_bq_rty_o = wb_bq_rty_o_vec[wb_bq_idx];
+    assign wb_bq_dat_o = wb_bq_dat_o_vec[wb_bq_idx];
+    
+    
+    wire [2:0] wb_agc_idx = wb_agc_adr_i[10:8];
     
     wire        wb_agc_ack_o_vec [7:0];
     wire        wb_agc_err_o_vec [7:0];
     wire        wb_agc_rty_o_vec [7:0];
     wire [31:0] wb_agc_dat_o_vec [7:0];
 
-    assign wb_agc_ack_o = wb_agc_ack_o_vec[wb_idx];
-    assign wb_agc_err_o = wb_agc_err_o_vec[wb_idx];
-    assign wb_agc_rty_o = wb_agc_rty_o_vec[wb_idx];
-    assign wb_agc_dat_o = wb_agc_dat_o_vec[wb_idx];
+    assign wb_agc_ack_o = wb_agc_ack_o_vec[wb_agc_idx];
+    assign wb_agc_err_o = wb_agc_err_o_vec[wb_agc_idx];
+    assign wb_agc_rty_o = wb_agc_rty_o_vec[wb_agc_idx];
+    assign wb_agc_dat_o = wb_agc_dat_o_vec[wb_agc_idx];
+
+
+// ///// Actual WISHBONE definitions. These are the dumb WISHBONE
+// ///// connections for now, I'll probably add a WBB3 or WBB4 or
+// ///// whatever interface which tacks on the additional signals.
+// `define DEFINE_WB_IFV( prefix , address_width, data_width, suffix ) \
+//   wire [ data_width - 1:0] prefix``dat_i``suffix;                   \
+//   wire [ data_width - 1:0] prefix``dat_o``suffix;                   \
+//   wire [ address_width - 1:0] prefix``adr_o``suffix;                \
+//   wire [ (data_width/8)-1:0] prefix``sel_o``suffix;                 \
+//   wire prefix``cyc_o``suffix;                                       \
+//   wire prefix``stb_o``suffix;                                       \
+//   wire prefix``we_o``suffix;                                        \
+//   wire prefix``ack_i``suffix;                                       \
+//   wire prefix``rty_i``suffix;                                       \
+//   wire prefix``err_i``suffix
+
 
     // Connect the AGC inputs
     genvar idx;
     generate
-        for(idx = 0; i<8; i = i+1) begin : TRIGGER_CHAIN_LOOP
-            `DEFINE_WB_IF( wb_bq`CHAN_NUM(idx), 8, 32);
-            `DEFINE_WB_IF( wb_agc`CHAN_NUM(idx), 8, 32);
+        for(idx = 0; idx<8; idx = idx+1) begin : TRIGGER_CHAIN_LOOP
+            `DEFINE_WB_IF( wb_bq_connect_, 8, 32);
+            `DEFINE_WB_IF( wb_agc_connect_, 8, 32);
 
-            assign wb_bq_ack_o_vec[idx] = wb_bq`CHAN_NUM(idx)ack_o;
-            assign wb_bq_err_o_vec[idx] = wb_bq`CHAN_NUM(idx)err_o;
-            assign wb_bq_rty_o_vec[idx] = wb_bq`CHAN_NUM(idx)rty_o;
-            assign wb_bq_dat_o_vec[idx] = wb_bq`CHAN_NUM(idx)dat_o;
-
-            // The cyc signal controls whether anything happens
-            assign wb_bq`CHAN_NUM(idx)cyc_o = wb_bq_cyc_i && CHAN_ADDR_MATCH(wb_bq_adr_i, idx * 11'h100, CHAN_MASK);
-            assign wb_bq`CHAN_NUM(idx)stb_o = wb_bq_stb_i;
-            assign wb_bq`CHAN_NUM(idx)adr_o = wb_bq_adr_i[7:0];
-            assign wb_bq`CHAN_NUM(idx)dat_o = wb_bq_dat_i;
-            assign wb_bq`CHAN_NUM(idx)we_o  = wb_bq_we_i;
-            assign wb_bq`CHAN_NUM(idx)sel_o = wb_bq_sel_i;
-
+            assign wb_bq_ack_o_vec[idx] = wb_bq_connect_ack_i;
+            assign wb_bq_err_o_vec[idx] = wb_bq_connect_err_i;
+            assign wb_bq_rty_o_vec[idx] = wb_bq_connect_rty_i;
+            assign wb_bq_dat_o_vec[idx] = wb_bq_connect_dat_i;
+            
+            assign wb_agc_ack_o_vec[idx] = wb_agc_connect_ack_i;
+            assign wb_agc_err_o_vec[idx] = wb_agc_connect_err_i;
+            assign wb_agc_rty_o_vec[idx] = wb_agc_connect_rty_i;
+            assign wb_agc_dat_o_vec[idx] = wb_agc_connect_dat_i;
 
             // The cyc signal controls whether anything happens
-            assign wb_agc`CHAN_NUM(idx)cyc_o = wb_agc_cyc_i && CHAN_ADDR_MATCH(wb_agc_adr_i, idx * 11'h100, CHAN_MASK)
-            assign wb_agc`CHAN_NUM(idx)stb_o = wb_agc_stb_i;
-            assign wb_agc`CHAN_NUM(idx)adr_o = wb_agc_adr_i[7:0];
-            assign wb_agc`CHAN_NUM(idx)dat_o = wb_agc_dat_i;
-            assign wb_agc`CHAN_NUM(idx)we_o  = wb_agc_we_i;
-            assign wb_agc`CHAN_NUM(idx)sel_o = wb_agc_sel_i;
+            assign wb_bq_connect_cyc_o = wb_bq_cyc_i && `ADDR_MATCH(wb_bq_adr_i, (idx * 11'h100), CHAN_MASK);
+            assign wb_bq_connect_stb_o = wb_bq_stb_i;
+            assign wb_bq_connect_adr_o = wb_bq_adr_i[7:0];
+            assign wb_bq_connect_dat_o = wb_bq_dat_i;
+            assign wb_bq_connect_we_o  = wb_bq_we_i;
+            assign wb_bq_connect_sel_o = wb_bq_sel_i;
 
-            trigger_chain_wrapper #(.TIMESCALE_REDUCTION(2**TIMESCALE_REDUCTION_BITS))
+
+            // The cyc signal controls whether anything happens
+            assign wb_agc_connect_cyc_o = wb_agc_cyc_i && `ADDR_MATCH(wb_agc_adr_i, (idx * 11'h100), CHAN_MASK);
+            assign wb_agc_connect_stb_o = wb_agc_stb_i;
+            assign wb_agc_connect_adr_o = wb_agc_adr_i[7:0];
+            assign wb_agc_connect_dat_o = wb_agc_dat_i;
+            assign wb_agc_connect_we_o  = wb_agc_we_i;
+            assign wb_agc_connect_sel_o = wb_agc_sel_i;
+
+            trigger_chain_wrapper #(.AGC_TIMESCALE_REDUCTION(2**AGC_TIMESCALE_REDUCTION_BITS))
             u_chain(
-                .wb_clk_i(wbclk),
-                .wb_rst_i(1'b0),
-                `CONNECT_WBS_IFM( wb_bq_ , wb_bq`CHAN_NUM(idx) ),
-                `CONNECT_WBS_IFM( wb_agc_ , wb_agc`CHAN_NUM(idx) ),
+                .wb_clk_i(wb_clk_i),
+                .wb_rst_i(wb_rst_i),
+                `CONNECT_WBS_IFM( wb_bq_ , wb_bq_connect_ ),
+                `CONNECT_WBS_IFM( wb_agc_ , wb_agc_connect_ ),
                 .reset_i(reset_i), 
                 .aclk(aclk),
                 .dat_i(dat_i[idx]),
@@ -121,5 +145,4 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
 
 endmodule
 
-`undef CHAN_NUM
-`undef ADDR_MASK
+`undef ADDR_MATCH

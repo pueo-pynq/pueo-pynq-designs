@@ -78,8 +78,7 @@ module trigger_chain_wrapper #(parameter AGC_TIMESCALE_REDUCTION = 4)(
         `CONNECT_WBS_IFS( wb_ , wb_agc_ ),
         .aclk(aclk),
         .aresetn(reset_i),
-        .dat_i(dat_i),//(data_stage_connection[1]),
-        
+        .dat_i(data_stage_connection[1]),
         .dat_o(dat_o)
     );
 
