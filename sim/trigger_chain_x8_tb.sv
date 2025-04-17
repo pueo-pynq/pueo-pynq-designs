@@ -18,8 +18,8 @@ module trigger_chain_x8_tb;
     // int Q = 8; 
 
     // Notch location
-    localparam int notch [2] = {350, 400};
-    localparam int Q [2] = {3,2};       
+    localparam int notch [2] = {250, 400};
+    localparam int Q [2] = {8,8};       
     localparam int GAUSS_NOISE_SIZE = 200;
 
     // AGC Parameters
@@ -235,9 +235,13 @@ module trigger_chain_x8_tb;
 
                 $monitor($sformatf("Prepping Biquad %1d", bqidx));
                 $monitor($sformatf("Notch at %1d MHz, Q at %1d", notch[bqidx], Q[bqidx]));
-
+                $monitor("Using moving notch");
                 // LOAD BIQUAD NOTCH COEFFICIENTS FROM A FILE
-                fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", notch[bqidx], Q[bqidx]),"r");
+                if (bqidx==0) begin
+                    fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", (notch[bqidx] + 15*idx), Q[bqidx]),"r");
+                end else begin
+                    fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", (notch[bqidx]), Q[bqidx]),"r");
+                end
 
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
@@ -592,7 +596,7 @@ module trigger_chain_x8_tb;
 
             $monitor("Beginning Random Gaussian Stimulus");
             for(int idx=0;idx<8;idx=idx+1) begin: OPEN_FILE_LOOP
-                f_outs[idx] = $fopen($sformatf("freqs/outputs/trigger_chain_output_%1d_gauss_trial.txt", idx), "w");
+                f_outs[idx] = $fopen($sformatf("freqs/outputs/trigger_chain_output_%1d_gauss_moving_notch_trial.txt", idx), "w");
             end
             forever begin: FILL_STIM_GAUSS_LOOP // We are expecting 80064 samples, cut the end
                 #0.01;
