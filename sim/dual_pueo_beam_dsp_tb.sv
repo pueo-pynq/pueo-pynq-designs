@@ -105,10 +105,10 @@ module dual_pueo_beam_dsp_tb;
         $display("Edge Thresholds Load");
         update_reg = 1'b0;
         thresh_reg = {1,{17{1'b1}}}; //262143 0x3FFFF
-        thresh_ce_reg = 2'b10; // Load this threshold into A(?).
+        thresh_ce_reg = 2'b10; // Load this threshold into A.
         @(posedge clk);
         thresh_reg = {0,{17{1'b0}}}; //0
-        thresh_ce_reg = 2'b01; // Load this threshold into B(?).
+        thresh_ce_reg = 2'b01; // Load this threshold into B.
         #1.75
         @(posedge clk);
         update_reg = 1'b1; // THIS ALSO MEANS IT TAKES 2 CLOCKS TO LOAD
@@ -123,8 +123,8 @@ module dual_pueo_beam_dsp_tb;
 
         beamA_in0_reg   = 17'd65535; //{17{1'b1}};
         beamA_in1_reg   = 17'd65535; //{17{1'b1}};
-        beamB_in0_reg   = 17'd65535; //{17{1'b1}};
-        beamB_in1_reg   = 17'd65535; //{17{1'b1}};
+        beamB_in0_reg   = 17'd0; //{17{1'b1}};
+        beamB_in1_reg   = 17'd0; //{17{1'b1}};
         
         for(int j=0; j<10;j=j+1) begin
             @(posedge clk);
@@ -133,8 +133,8 @@ module dual_pueo_beam_dsp_tb;
 
         beamA_in0_reg   = 17'd65536; //{17{1'b1}};
         beamA_in1_reg   = 17'd65536; //{17{1'b1}};
-        beamB_in0_reg   = 17'd65536; //{17{1'b1}};
-        beamB_in1_reg   = 17'd65536; //{17{1'b1}};
+        beamB_in0_reg   = 17'd0; //{17{1'b1}};
+        beamB_in1_reg   = 17'd0; //{17{1'b1}};
         
         for(int j=0; j<10;j=j+1) begin
             @(posedge clk);
