@@ -62,10 +62,10 @@ module dual_pueo_beam_tb;
         #1.75
         $display("Initial Threshold Load");
         update_reg = 1'b0;
-        thresh_reg = 18'h0FFFF; //10
+        thresh_reg = 18'd256; //10
         thresh_ce_reg = 2'b10; // Load this threshold into A(?).
         @(posedge clk);
-        thresh_reg = 18'h0F000; //20
+        thresh_reg = 18'd255;//h0F000; //20
         thresh_ce_reg = 2'b01; // Load this threshold into B(?).
         #1.75
         @(posedge clk);
@@ -129,6 +129,25 @@ module dual_pueo_beam_tb;
                 end else begin
                     beamA_vec_reg[chan_idx][samp_idx] = 16;
                     beamB_vec_reg[chan_idx][samp_idx] = 15;
+
+                end
+            end
+        end
+
+        for(int j=0; j<16;j=j+1) begin
+            @(posedge clk);
+            #1.75;
+        end
+        // $display($sformatf("All inputs %1d,\t Trigger [%1d,%1d]",beamA_in0_reg, trigger_reg[0], trigger_reg[1]));
+
+        for(int chan_idx=0; chan_idx<NCHAN; chan_idx++) begin
+            for(int samp_idx=0; samp_idx<NSAMP; samp_idx++) begin
+                if(samp_idx < NSAMP-1) begin
+                    beamA_vec_reg[chan_idx][samp_idx] = 16;
+                    beamB_vec_reg[chan_idx][samp_idx] = 16;
+                end else begin
+                    beamA_vec_reg[chan_idx][samp_idx] = 17;
+                    beamB_vec_reg[chan_idx][samp_idx] = 17;
 
                 end
             end
