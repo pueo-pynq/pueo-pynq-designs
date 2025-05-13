@@ -86,7 +86,7 @@ module dual_pueo_beam_tb;
             end
         end
 
-        for(int i=0; i<31; i=i+1) begin
+        for(int i=0; i<4; i=i+1) begin
             
             for(int j=0; j<16;j=j+1) begin
                 @(posedge clk);
@@ -102,8 +102,39 @@ module dual_pueo_beam_tb;
             end
 
         end 
-        @(posedge clk);
-        #1.75;
+        for(int j=0; j<16;j=j+1) begin
+            @(posedge clk);
+            #1.75;
+        end
+        // $display($sformatf("All inputs %1d,\t Trigger [%1d,%1d]",beamA_in0_reg, trigger_reg[0], trigger_reg[1]));
+
+        for(int chan_idx=0; chan_idx<NCHAN; chan_idx++) begin
+            for(int samp_idx=0; samp_idx<NSAMP; samp_idx++) begin
+                beamA_vec_reg[chan_idx][samp_idx] = 31;
+                beamB_vec_reg[chan_idx][samp_idx] = 31;
+            end
+        end
+
+        for(int j=0; j<16;j=j+1) begin
+            @(posedge clk);
+            #1.75;
+        end
+        // $display($sformatf("All inputs %1d,\t Trigger [%1d,%1d]",beamA_in0_reg, trigger_reg[0], trigger_reg[1]));
+
+        for(int chan_idx=0; chan_idx<NCHAN; chan_idx++) begin
+            for(int samp_idx=0; samp_idx<NSAMP; samp_idx++) begin
+                if(samp_idx < NSAMP/2) begin
+                    beamA_vec_reg[chan_idx][samp_idx] = 15;
+                    beamB_vec_reg[chan_idx][samp_idx] = 16;
+                end else begin
+                    beamA_vec_reg[chan_idx][samp_idx] = 16;
+                    beamB_vec_reg[chan_idx][samp_idx] = 15;
+
+                end
+            end
+        end
+
+
 
         for(int j=0; j<4;j=j+1) begin
             @(posedge clk);
