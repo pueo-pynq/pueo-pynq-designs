@@ -153,7 +153,38 @@ module dual_pueo_beam_tb;
             end
         end
 
+        $display("New Threshold Load");
+        update_reg = 1'b0;
+        thresh_reg = 18'd246016; //Max value
+        thresh_ce_reg = 2'b10; // Load this threshold into A(?).
+        @(posedge clk);
+        thresh_reg = 18'd246015;//One less than max value
+        thresh_ce_reg = 2'b01; // Load this threshold into B(?).
+        #1.75
+        @(posedge clk);
+        update_reg = 1'b1; // THIS ALSO MEANS IT TAKES 2 CLOCKS TO LOAD
+        #1.75
+        @(posedge clk);
+        #1.75
+        thresh_ce_reg = 2'b00;
+        update_reg = 1'b0;
+        @(posedge clk);
+        #1.75
+        $display("New Threshold Has Been Loaded");
 
+
+        for(int chan_idx=0; chan_idx<NCHAN; chan_idx++) begin
+            for(int samp_idx=0; samp_idx<NSAMP; samp_idx++) begin
+                if(samp_idx < NSAMP-1) begin
+                    beamA_vec_reg[chan_idx][samp_idx] = 31;
+                    beamB_vec_reg[chan_idx][samp_idx] = 31;
+                end else begin
+                    beamA_vec_reg[chan_idx][samp_idx] = 31;
+                    beamB_vec_reg[chan_idx][samp_idx] = 31;
+
+                end
+            end
+        end
 
         for(int j=0; j<4;j=j+1) begin
             @(posedge clk);
