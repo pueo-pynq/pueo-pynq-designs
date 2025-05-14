@@ -6,7 +6,7 @@ module beam_alignment_tb;
     wire clk;
     tb_rclk #(.PERIOD(5.0)) u_clk(.clk(clk));
 
-    localparam NBEAMS = 2;
+    localparam NBEAMS = 4;
 
     reg [39:0]          in_data_reg [7:0]   = {{40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}};
     reg [17:0]          thresh_reg          = 18'd0;
@@ -21,6 +21,11 @@ module beam_alignment_tb;
     wire [NBEAMS-1:0]   trigger;
 
     assign trigger_reg = trigger;
+
+    // Do some vectorizing for debugging
+    wire [7:0][4:0] vectorized_data [7:0];
+
+    assign vectorized_data = in_data_reg;
 
     beam_alignment #(.NBEAMS(NBEAMS))
      u_beam_align(
@@ -61,19 +66,22 @@ module beam_alignment_tb;
         @(posedge clk);
         #1.75
         $display("Initial Threshold Has Been Loaded");
-                    
-        for(int i=0; i<3; i=i+1) begin  
-            for(int j=0; j<16;j=j+1) begin
+        forever begin
+            for(int i=0; i<4; i=i+1) begin  
+                // for(int j=0; j<16;j=j+1) begin
+                //     @(posedge clk);
+                //     #1.75;
+                // end
                 @(posedge clk);
                 #1.75;
-            end
-            for(int k=0; k<8; k=k+1) begin : CHANNEL_FILL
-                in_data_reg[k] = {{5'd7},{5'd6},{5'd5},{5'd4},{5'd3},{5'd2},{5'd1},{5'd0}};
-                // in_data_reg[k] = in_data_reg[k] + {{5'd7*i},{5'd7*i},{5'd7*i},{5'd7*i},{5'd7*i},{5'd7*i},{5'd7*i},{5'd7*i}};
-            end
-        end 
-        @(posedge clk);
-        #1.75;
+                for(int k=0; k<8; k=k+1) begin : CHANNEL_FILL
+                    in_data_reg[k] = {{5'd7},{5'd6},{5'd5},{5'd4},{5'd3},{5'd2},{5'd1},{5'd0}};
+                    in_data_reg[k] = in_data_reg[k] + i*{{5'd8},{5'd8},{5'd8},{5'd8},{5'd8},{5'd8},{5'd8},{5'd8}};
+                end
+            end 
+            // @(posedge clk);
+            // #1.75;
+        end
     
         // beamA_in0_reg   = 17'd0;
         // beamA_in1_reg   = 17'd0;

@@ -28,19 +28,31 @@ module beam_alignment (
     localparam SAMPLE_STORE_DEPTH = 8;
     // localparam NBEAMS_AVAILABLE = 45;
 
-    int delay_array [(`BEAM_TOTAL)-1:0][NCHAN-1:0] = `BEAM_ANTENNA_DELAYS;
+    // NOTE THE BIG-ENDIAN ARRAYS HERE
+    localparam int delay_array [0:(`BEAM_TOTAL)-1][0:NCHAN-1] = `BEAM_ANTENNA_DELAYS;
 
-    reg  [SAMPLE_STORE_DEPTH-1:0][NSAMP*NBITS-1:0] sample_store [NCHAN-1:0];
+    reg  [SAMPLE_STORE_DEPTH*NSAMP*NBITS-1:0] sample_store [NCHAN-1:0];
     wire [NCHAN-1:0][NSAMP*NBITS-1:0] beams_delayed [NBEAMS-1:0];
+    wire [NSAMP-1:0][NBITS-1:0] vectorized_delayed_data [NBEAMS-1:0][NCHAN-1:0];
 
-    genvar beam_idx, chan_idx, sample_idx;
+    genvar beam_idx, chan_idx, clock_idx, samp_idx;
 
     generate
+
+        // Vectorize for debugging
+        for(beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin
+            for(chan_idx=0; chan_idx<NCHAN; chan_idx++) begin
+                for(samp_idx=0; samp_idx<NSAMP; samp_idx++) begin
+                    assign vectorized_delayed_data[beam_idx][chan_idx][samp_idx] = beams_delayed[beam_idx][chan_idx][samp_idx*NBITS +: NBITS];
+                end
+            end
+        end
+
         for(beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin : ALIGNMENT
             for(chan_idx=0; chan_idx<NCHAN; chan_idx++) begin
                 // TODO:    This is not accounting for the maximum delay seen in each antenna.
                 //          I'm not fully sure what, if any, effect that would have on the trigger decisions.
-                assign beams_delayed[beam_idx][chan_idx] = sample_store[chan_idx][(delay_array[beam_idx][chan_idx])*NBITS +: NSAMP*NBITS];
+                assign beams_delayed[beam_idx][chan_idx] = sample_store[chan_idx][( delay_array[beam_idx][chan_idx])*NBITS +: NSAMP*NBITS];
             end
         end
 
@@ -68,18 +80,17 @@ module beam_alignment (
                 );
             end
         end
-    endgenerate
 
-    generate
-        // genvar chan_idx, sample_idx;
+
+        // RIGHT NOW THE SAMPLES RUN IN REVERSE....
         for(chan_idx=0; chan_idx<NCHAN; chan_idx++) begin
-            for(sample_idx=1; sample_idx<SAMPLE_STORE_DEPTH;sample_idx++) begin
+            for(clock_idx=SAMPLE_STORE_DEPTH-2; clock_idx>=0;clock_idx--) begin
                 always @(posedge clk_i) begin: SHIFT_SAMPLE_STORE
-                    sample_store[chan_idx][sample_idx] <= sample_store[chan_idx][sample_idx-1]; // Shift over
+                    sample_store[chan_idx][clock_idx*NSAMP*NBITS +: NSAMP*NBITS] <= sample_store[chan_idx][(clock_idx+1)*NSAMP*NBITS +: NSAMP*NBITS]; // Shift over
                 end
             end
             always @(posedge clk_i) begin: NEW_SAMPLE_STORE
-                sample_store[chan_idx][0] <= data_i[chan_idx]; // New one goes in
+                sample_store[chan_idx][(SAMPLE_STORE_DEPTH-1)*NSAMP*NBITS +: NSAMP*NBITS] <= data_i[chan_idx]; // New one goes in
             end
         end 
     endgenerate
