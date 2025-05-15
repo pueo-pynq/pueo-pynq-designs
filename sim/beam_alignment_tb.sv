@@ -6,7 +6,7 @@ module beam_alignment_tb;
     wire clk;
     tb_rclk #(.PERIOD(5.0)) u_clk(.clk(clk));
 
-    localparam NBEAMS = 4;
+    localparam NBEAMS = 46;
 
     reg [39:0]          in_data_reg [7:0]   = {{40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}, {40{1'b0}}};
     reg [17:0]          thresh_reg          = 18'd0;

@@ -25,7 +25,14 @@ module beam_alignment (
     localparam NBITS=5;
     localparam NSAMP=8; 
     localparam NCHAN=8;
-    localparam SAMPLE_STORE_DEPTH = 8;
+    localparam SAMPLE_STORE_DEPTH = 8+2; // The +2 is for aligning antenna 0 to the same place every time, even with a "negative delay"
+
+    generate
+        if(`MAX_ANTENNA_DELAY_0 > 8) begin: THROW_AN_ERROR
+            channel_0_max_antenna_delay_bigger_than_8 errormod();
+        end
+    endgenerate
+
     // localparam NBEAMS_AVAILABLE = 45;
 
     // NOTE THE BIG-ENDIAN ARRAYS HERE
@@ -50,9 +57,10 @@ module beam_alignment (
 
         for(beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin : ALIGNMENT
             for(chan_idx=0; chan_idx<NCHAN; chan_idx++) begin
-                // TODO:    This is not accounting for the maximum delay seen in each antenna.
-                //          I'm not fully sure what, if any, effect that would have on the trigger decisions.
-                assign beams_delayed[beam_idx][chan_idx] = sample_store[chan_idx][( delay_array[beam_idx][chan_idx])*NBITS +: NSAMP*NBITS];
+                // The first term below makes sure that antenna 0 always has a delay of 8. 
+                // If another antenna has a delay of 0, as long as antenna 0 has a max delay < 8 all should be good.
+                int sample_delay = (SAMPLE_STORE_DEPTH-1)*NSAMP - ((8 - delay_array[beam_idx][0]) + delay_array[beam_idx][chan_idx]);
+                assign beams_delayed[beam_idx][chan_idx] = sample_store[chan_idx][( sample_delay )*NBITS +: NSAMP*NBITS];
             end
         end
 
