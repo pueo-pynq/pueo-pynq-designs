@@ -70,9 +70,9 @@ module beam_alignment (
                     .clk_i(clk_i),
                     .beamA_i(beams_delayed[beam_idx + 1]), // Beam A corresponds to the MSB of the trigger bits
                     .beamB_i(beams_delayed[beam_idx + 0]),
-                    .thresh_i(thresh),
+                    .thresh_i(thresh_i),
                     .thresh_ce_i(thresh_ce_i[beam_idx +: 2]),
-                    .update_i(update),        
+                    .update_i(update_i),        
                     .trigger_o(trigger_o[beam_idx +: 2])
                 );
             end else begin: SINGLE_USE
@@ -81,9 +81,9 @@ module beam_alignment (
                     .clk_i(clk_i),
                     .beamA_i(beams_delayed[beam_idx + 0]),
                     .beamB_i(beams_delayed[beam_idx + 0]),
-                    .thresh_i(thresh),
+                    .thresh_i(thresh_i),
                     .thresh_ce_i({thresh_ce_i[beam_idx], thresh_ce_i[beam_idx]}),
-                    .update_i(update),        
+                    .update_i(update_i),        
                     .trigger_o({trigger_o[beam_idx], empty})
                 );
             end
