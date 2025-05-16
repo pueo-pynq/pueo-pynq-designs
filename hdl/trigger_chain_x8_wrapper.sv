@@ -19,9 +19,9 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
         // Control to capture the output to the RAM buffer
         input reset_i, 
         input aclk,
-        input [95:0] dat_i [7:0],
+        input [7:0][95:0] dat_i ,
         
-        output [39:0] dat_o [7:0]
+        output [7:0][39:0] dat_o 
     );
 
     // QUALITY OF LIFE FUNCTIONS

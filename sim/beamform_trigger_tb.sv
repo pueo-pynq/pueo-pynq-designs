@@ -49,8 +49,8 @@ module beamform_trigger_tb;
 
     assign vectorized_data = in_data_reg;
 
-    beam_alignment #(.NBEAMS(NBEAMS))
-     u_beam_align(
+    beamform_trigger #(.NBEAMS(NBEAMS))
+     u_beam_trigger(
         .clk_i(clk),
         .data_i(in_data),
 

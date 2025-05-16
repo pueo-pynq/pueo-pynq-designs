@@ -1,21 +1,18 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
-module trigger_chain_x8_tb;
+module L1_trigger_tb;
     
     parameter       THIS_DESIGN = "BASIC";
     parameter       THIS_STIM   = "GAUSS_RAND";//"SINE";//"GAUSS_RAND";
-    parameter TIMESCALE_REDUCTION_BITS = 5; // Make the AGC period easier to simulate
+    parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
     parameter TARGET_RMS = 4;
+    parameter NBEAMS = 2;
 
     // PID control values. Note that this controller implementation cumulatively adds the output here
     // to the values. Other implementations therefore call this value "I". In a sense this is "P" for
     // the first derivative.
-    parameter K_scale_P = -50.0;//-1.0/256;
-    parameter K_offset_P = -1.0/8;//-1.0/256;
-
-    // Biquad Parameters
-    // int notch = 650;
-    // int Q = 8; 
+    parameter K_scale_P = -50.0;
+    parameter K_offset_P = -1.0/8;
 
     // Notch location
     localparam int notch [2] = {250, 400};
@@ -85,12 +82,6 @@ module trigger_chain_x8_tb;
     assign wb_agc_adr_o = address_agc;
     assign ack_agc = wb_agc_ack_i;
 
-    // reg wr_agc = 0; // QOL tie these together if not ever implementing writing
-    // assign wb_agc_cyc_o = wr_agc;
-    // assign wb_agc_stb_o = wr_agc;
-    // assign wb_agc_we_o = wr_agc;
-    // assign wb_agc_sel_o = {4{wr_agc}};
-
     reg use_agc = 0; // QOL tie these together if not ever implementing writing
     reg wr_agc = 0; // QOL tie these together if not ever implementing writing
     assign wb_agc_cyc_o = use_agc;
@@ -123,17 +114,6 @@ module trigger_chain_x8_tb;
         end
     endtask
 
-    // // Probes
-    // // Output Samples, both indexed and as one array
-    // wire [11:0] probe0[7:0];
-    // wire [12*8-1:0] probe0_arr;
-    // generate
-    //     genvar j;
-    //     for (j=0;j<8;j=j+1) begin : DEVEC_PROBE0
-    //         assign probe0[j] = probe0_arr[12*j +: 12];
-    //     end
-    // endgenerate
-
     // ADC samples, both indexed and as one array
     reg [11:0] samples [7:0] [7:0];
     initial begin
@@ -142,8 +122,7 @@ module trigger_chain_x8_tb;
         end
     end
 
-
-    wire [7:0][12*8-1:0] sample_arr ;
+    wire  [7:0][12*8-1:0] sample_arr;
 
     generate
         for (genvar idx=0;idx<8;idx=idx+1) begin: SAMPLE_ARR_CHAN_LOOP
@@ -160,16 +139,30 @@ module trigger_chain_x8_tb;
     endgenerate
 
 
-    wire [5:0] outsample [7:0] [7:0]; // 8 channels and 8 samples.
-    wire [7:0][5*8-1:0] outsample_arr ; // 1 channel, samples appended
+    // Trigger and threshold control
+    reg [17:0]          thresh_reg          = 18'd0;
+    reg [NBEAMS-1:0]    thresh_ce_reg       = {NBEAMS{1'b0}};
+    reg                 update_reg          = 1'b0;
+    reg [NBEAMS-1:0]    trigger_reg; 
 
-    generate
-        for (genvar idx=0;idx<8;idx=idx+1) begin: DEVEC_CHAN
-            for (genvar k=0;k<8;k=k+1) begin : DEVEC
-                assign outsample[idx][k] = outsample_arr[idx][5*k +: 5];
-            end
-        end
-    endgenerate
+    wire [17:0]         thresh              = thresh_reg;
+    wire [NBEAMS-1:0]   thresh_ce           = thresh_ce_reg;
+    wire                update              = update_reg;
+    wire [NBEAMS-1:0]   trigger;
+
+    assign trigger_reg = trigger;
+
+
+    // wire [5:0] outsample [7:0] [7:0]; // 8 channels and 8 samples.
+    // wire [5*8-1:0] outsample_arr [7:0]; // 1 channel, samples appended
+
+    // generate
+    //     for (genvar idx=0;idx<8;idx=idx+1) begin: DEVEC_CHAN
+    //         for (genvar k=0;k<8;k=k+1) begin : DEVEC
+    //             assign outsample[idx][k] = outsample_arr[idx][5*k +: 5];
+    //         end
+    //     end
+    // endgenerate
 
     // Reset
    reg reset_reg = 1'b0;
@@ -179,31 +172,30 @@ module trigger_chain_x8_tb;
     generate
         if (THIS_DESIGN == "BASIC") begin : BASIC
 
-            trigger_chain_x8_wrapper #(.AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS))
-                u_chain(
+            L1_trigger #(.AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS))
+                u_L1_trigger(
                     .wb_clk_i(wbclk),
                     .wb_rst_i(1'b0),
                     `CONNECT_WBS_IFM( wb_bq_ , wb_ ),
                     `CONNECT_WBS_IFM( wb_agc_ , wb_agc_ ),
+
+                    .thresh_i(thresh),
+                    .thresh_ce_i(thresh_ce),
+                    .update_i(update),
+                    
                     .reset_i(reset), 
                     .aclk(aclk),
                     .dat_i(sample_arr),
-                    .dat_o(outsample_arr));
+                    .trigger_o(trigger));
 
         end else begin : DEFAULT // Currently the same as "BASIC"
-            // trigger_chain_design u_chain(
-            //     .wb_clk_i(wbclk),
-            //     .wb_rst_i(1'b0),
-            //     `CONNECT_WBS_IFM( wb_ , wb_ ),
-            //     `CONNECT_WBS_IFM( wb_agc_ , wb_agc_ ),
-            //     .reset_i(reset), 
-            //     .aclk(aclk),
-            //     .dat_i(sample_arr),
-            //     .dat_o(outsample_arr));
+
+            // Something else
+
         end
     endgenerate
 
-    int fc, fd, f, fdebug; // File Descriptors for I/O of test
+    int fc; //, fd, f, fdebug; // File Descriptors for I/O of test
     int code, dummy, data_from_file; // Used for file I/O intermediate steps
     int coeff_from_file; // Intermediate transferring coefficient from file to biquad     
     reg [8*10:1] str; // String read from file
@@ -233,9 +225,9 @@ module trigger_chain_x8_tb;
 
             for (int bqidx=0; bqidx<2; bqidx = bqidx+1) begin: BQ_LOOP
 
-                $monitor($sformatf("Prepping Biquad %1d", bqidx));
-                $monitor($sformatf("Notch at %1d MHz, Q at %1d", notch[bqidx], Q[bqidx]));
-                $monitor("Using moving notch");
+                $display($sformatf("Prepping Biquad %1d", bqidx));
+                $display($sformatf("Notch at %1d MHz, Q at %1d", notch[bqidx], Q[bqidx]));
+                $display("Using moving notch");
                 // LOAD BIQUAD NOTCH COEFFICIENTS FROM A FILE
                 if (bqidx==0) begin
                     fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", (notch[bqidx] + 15*idx), Q[bqidx]),"r");
@@ -334,11 +326,11 @@ module trigger_chain_x8_tb;
 
         #200;
 
-        $monitor("Prepping AGCs");
+        $display("Prepping AGCs");
 
         for(int idx=0; idx<8; idx=idx+1) begin: AGC_PREP_BY_CHAN
             
-            $monitor($sformatf("Prepping AGC %1d", idx));
+            $display($sformatf("Prepping AGC %1d", idx));
             do_write_agc(22'h014 + idx * 22'h100, AGC_offset[idx]); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
             // I believe from other documentation
             // that scale is a fraction of 4096 (13 bits, 0x1000).
@@ -352,9 +344,9 @@ module trigger_chain_x8_tb;
 
             #200;
             do_write_agc(22'h000 + idx * 22'h100, 12'h004); // Reset AGC
-            do_write_agc(22'h000 + idx * 22'h100, 12'h001); // Start running AGC measurement cycle
+            do_write_agc(22'h000 + idx * 22'h100, 12'h001);//12'h001); // Start running AGC measurement cycle
             
-            $monitor($sformatf("FINISHED AGC %1d", idx));
+            $display($sformatf("FINISHED AGC %1d", idx));
         end
         forever begin
             #0.01;
@@ -388,217 +380,49 @@ module trigger_chain_x8_tb;
     end
 
 
-    // Stimulus with Biquad Notch Loop  
+    // Stimulus
     int clocks = 0;
     initial begin: STIM_LOOP
         #150;
+         if (THIS_STIM == "GAUSS_RAND") begin : GAUSS_RAND_RUN
 
-        if (THIS_STIM == "FILE_DEP") begin : FILE_RUN
-                // Notch location
-            // for(int notch=260; notch<1200; notch = notch+5000) begin
-
-            //     // Qs for notch
-            //     for(int Q=7; Q<8; Q = Q+50) begin
-
-
-            //         for (int bqidx=0; bqidx<2; bqidx = bqidx+1) begin: BQ_LOOP
-
-            //             $monitor($sformatf("Prepping Biquad %1d", bqidx));
-            //             $monitor($sformatf("Notch at %1d MHz, Q at %1d", notch+bqidx*200, Q));
-
-            //             // LOAD BIQUAD NOTCH COEFFICIENTS FROM A FILE
-            //             fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", notch+bqidx*200, Q),"r");
-
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h04, coeff_from_file); // B
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h04, coeff_from_file); // A
-
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h08, coeff_from_file); // C_2
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h08, coeff_from_file); // C_3  // Yes, this is the correct order according to the documentation
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h08, coeff_from_file); // C_1
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h08, coeff_from_file); // C_0
-
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h0C, coeff_from_file); // a_1'  // For incremental computation, unused
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h0C, coeff_from_file); // a_2'
-
-            //             // f FIR
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file); // D_FF  
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file); // X_6    
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file); // X_5   
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_4   
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_3   
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_2   
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h10, coeff_from_file);  // X_1 
-                    
-            //             // g FIR
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // E_GG  
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file); // X_7 
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_6
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_5    
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_4  
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_3  
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_2  
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h14, coeff_from_file);  // X_1 
-                        
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h18, coeff_from_file);  // D_FG
-
-            //             code = $fgets(str, fc);
-            //             dummy = $sscanf(str, "%d", coeff_from_file);
-            //             do_write_bq( bqidx*8'h80 + 8'h1C, coeff_from_file);  // E_GF
-
-            //             do_write_bq( bqidx*8'h80 + 8'h00, 32'd1 );     // Update
-            //         end 
-                    
-            //         $monitor("Prepping AGC");
-                    
-            //         do_write_agc(8'h14, AGC_offset); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-            //         // I believe from other documentation
-            //         // that scale is a fraction of 4096 (13 bits, 0x1000).
-            //         do_write_agc(8'h10, AGC_scale); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+        $display("Setup");
+        for(int j=0; j<25; j=j+1) begin
+            #1.75;
+            @(posedge aclk);
+        end
+        #1.75;
+        @(posedge aclk);
+        #1.75;
+        $display("Initial Threshold Load");
+        for(int beam_idx=0; beam_idx<NBEAMS; beam_idx = beam_idx+2) begin
+            update_reg = 1'b0;
+            thresh_reg = 18'd9000; 
+            thresh_ce_reg[beam_idx +: 2] = 2'b10; // Load this threshold into A.
+            @(posedge aclk);
+            thresh_reg = 18'd9000; 
+            thresh_ce_reg[beam_idx +: 2] = 2'b01; // Load this threshold into B.
+            #1.75;
+            @(posedge aclk);
+            update_reg = 1'b1; // Apply new thresholds
+            #1.75;
+            @(posedge aclk);
+            #1.75;
+            thresh_ce_reg[beam_idx +: 2] = 2'b00;
+            update_reg = 1'b0;
+            @(posedge aclk);
+            #1.75;
+        end
+        for(int i=0; i<64; i=i+1) begin  
+            @(posedge aclk);
+            #1.75;
+        end
+        $display("Initial Threshold Has Been Loaded");
 
 
-            //         // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
-            //         // The first signal here tells the offset and scale to load into the first FF
-            //         // and the second signal applies them via the second FF.
-            //         do_write_agc(8'h00, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-            //         do_write_agc(8'h00, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-
-
-            //         // SEND IN AN IMPULSE
-            //         #500;
-            //         fd = $fopen($sformatf("freqs/inputs/pulse_input_height_512_clipped.dat"),"r");
-            //         f = $fopen($sformatf("freqs/outputs/trigger_chain_pulse_output_height_512_notch_%1dMHz_%1dQ.dat", notch, Q), "w");
-            //         // fdebug = $fopen($sformatf("freqs/outputs/trigger_chain_pulse_output_debug_height_512_notch_%1dMHz_%1dQ_expanded.dat", notch, Q), "w");
-
-
-            //         for(int clocks=0;clocks<10007;clocks++) begin // We are expecting 80064 samples, cut the end
-            //             @(posedge aclk);
-            //             #0.01;
-            //             for (int i=0; i<8; i++) begin
-            //                 // Get the next inputs
-            //                 code = $fgets(str, fd);
-            //                 dummy = $sscanf(str, "%d", data_from_file);
-            //                 samples[i] = data_from_file;
-            //                 // $monitor("Hello World in loop");
-            //                 // $monitor($sformatf("sample is %1d", data_from_file));
-            //                 $fwrite(f,$sformatf("%1d\n",outsample[i]));
-            //                 #0.01;
-            //             end
-            //             // $fwrite(fdebug,$sformatf("%1d\n",0));
-            //             // $fwrite(fdebug,$sformatf("%1d\n",0));
-            //             // $fwrite(fdebug,$sformatf("%1d\n",0));
-            //             // $fwrite(fdebug,$sformatf("%1d\n",0));
-            //             // $fwrite(fdebug,$sformatf("%1d\n",0));
-            //             // $fwrite(fdebug,$sformatf("%1d\n",0));
-            //             // $fwrite(fdebug,$sformatf("%1d\n",0));
-            //             // $fwrite(fdebug,$sformatf("%1d\n",0));
-            //         end
-
-            //         // Biquad reset
-            //         reset_reg = 1'b1;
-            //         for(int clocks=0;clocks<32;clocks++) begin
-            //             @(posedge aclk);
-            //             #0.01;
-            //         end
-            //         reset_reg = 1'b0;
-
-            //         $fclose(fd);
-            //         // $fclose(fdebug);
-            //         $fclose(f);
-
-            //         // SEND IN THE GAUSSIAN HANNING WINDOWS
-
-            //         for(int in_count=0; in_count<10; in_count = in_count+1) begin
-                        
-            //             fd = $fopen($sformatf("freqs/inputs/gauss_input_%1d_sigma_hanning_clipped_%0d.dat", GAUSS_NOISE_SIZE, in_count),"r");
-            //             f = $fopen($sformatf("freqs/outputs/trigger_chain_output_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
-            //             // fdebug = $fopen($sformatf("freqs/outputs/trigger_chain_output_lpf_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
-            //             $monitor($sformatf("freqs/outputs/trigger_chain_output_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch,Q));
-
-            //             code = 1;
-
-            //             for(int clocks=0;clocks<10007;clocks++) begin // We are expecting 80064 samples, cut the end
-            //                 @(posedge aclk);
-            //                 #0.01;
-            //                 for (int i=0; i<8; i++) begin
-            //                     // Get the next inputs
-            //                     code = $fgets(str, fd);
-            //                     dummy = $sscanf(str, "%d", data_from_file);
-            //                     samples[i] = data_from_file;
-            //                     $fwrite(f,$sformatf("%1d\n",outsample[i]));
-            //                     // $fwrite(fdebug,$sformatf("%1d\n",probe0[i]));
-            //                     #0.01;
-            //                 end
-            //             end
-
-            //             // Biquad reset
-            //             reset_reg = 1'b1;
-            //             for(int clocks=0;clocks<32;clocks++) begin
-            //                 @(posedge aclk);
-            //                 #0.01;
-            //             end
-            //             reset_reg = 1'b0;
-            //             $fclose(fd);
-            //             // $fclose(fdebug);
-            //             $fclose(f);
-            //         end
-            //     end
-            // end
-        end else if (THIS_STIM == "GAUSS_RAND") begin : GAUSS_RAND_RUN
-
-
-            $monitor("Beginning Random Gaussian Stimulus");
-            for(int idx=0;idx<8;idx=idx+1) begin: OPEN_FILE_LOOP
-                f_outs[idx] = $fopen($sformatf("freqs/outputs/trigger_chain_output_%1d_gauss_moving_notch_trial.txt", idx), "w");
-            end
-            forever begin: FILL_STIM_GAUSS_LOOP // We are expecting 80064 samples, cut the end
+            $display("Beginning Random Gaussian Stimulus");
+            
+            forever begin: FILL_STIM_GAUSS_LOOP 
                 #0.01;
 
                 @(posedge aclk);
@@ -608,16 +432,16 @@ module trigger_chain_x8_tb;
                             stim_val = $dist_normal(seed, stim_mean, stim_sdev);
                         end while(stim_val>2047 || stim_val < -2048);
                         stim_vals[idx][i] = stim_val;
-                        $fwrite(f_outs[idx],$sformatf("%1d\n",outsample[idx][i]));
+                        // $fwrite(f_outs[idx],$sformatf("%1d\n",outsample[idx][i]));
                     end
                     samples[idx] = stim_vals[idx];
                 end
             end
         end else if (THIS_STIM == "SINE") begin : SINE_RUN
     
-            $monitor("Beginning CW Stimulus (UNTESTED)");
+            $display("Beginning CW Stimulus (UNTESTED)");
 
-            forever begin: FILL_STIM_SINE_LOOP // We are expecting 80064 samples, cut the end
+            forever begin: FILL_STIM_SINE_LOOP
                 #0.01;
                 @(posedge aclk);
                 for(int idx=0;idx<8;idx=idx+1) begin: FILL_STIM_SINE_CHAN_LOOP
@@ -630,10 +454,10 @@ module trigger_chain_x8_tb;
                     samples[idx] = stim_vals[idx];
                 end
             end
-            $monitor("Ending CW Stimulus (how did this even happen?)");
+            $display("Ending CW Stimulus (how did this even happen?)");
             
         end else begin
-            $monitor("THIS_DESIGN set to something other");     
+            $display("THIS_DESIGN set to something other");     
         end
     end
     
