@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
 `include "L1Beams_header.vh"
-module beam_alignment_tb;
+module beamform_trigger_tb;
 
     // parameter THIS_DESIGN = "ALIGNMENT";
     parameter   THIS_STIM = "GAUSS_AND_PULSE";
