@@ -68,8 +68,8 @@ module beam_alignment (
             if(beam_idx+1<NBEAMS) begin: DUAL_USE
                 dual_pueo_beam u_beamform(
                     .clk_i(clk_i),
-                    .beamA_i(beams_delayed[beam_idx + 1]), // Beam A corresponds to the MSB of the trigger bits
-                    .beamB_i(beams_delayed[beam_idx + 0]),
+                    .beamA_i(beams_delayed[beam_idx + 0]), // Beam A corresponds to the MSB of the trigger bits
+                    .beamB_i(beams_delayed[beam_idx + 1]),
                     .thresh_i(thresh_i),
                     .thresh_ce_i(thresh_ce_i[beam_idx +: 2]),
                     .update_i(update_i),        

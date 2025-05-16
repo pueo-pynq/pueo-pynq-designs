@@ -9,10 +9,12 @@ module beam_alignment_tb;
 
     // Gaussian Random Parameters
     int seed = 1;
-    int stim_mean = 15;
-    int stim_sdev = 4; // Note that max value is 32
+    // int stim_mean = 15;
+    int stim_sdev = 4;//4; // Note that max value is 32
     int stim_val = 0;
     int cycling_num = 0;
+    int cycling_offset = 0;
+    int pulse_height = 8;//0;
 
     localparam  NBITS=5;
     localparam  NSAMP=8; 
@@ -22,7 +24,7 @@ module beam_alignment_tb;
     wire clk;
     tb_rclk #(.PERIOD(5.0)) u_clk(.clk(clk));
 
-    localparam NBEAMS = 46;
+    localparam NBEAMS = 8;
 
     // NOTE THE BIG-ENDIAN ARRAYS HERE
     localparam int delay_array [0:(`BEAM_TOTAL)-1][0:NCHAN-1] = `BEAM_ANTENNA_DELAYS;
@@ -71,10 +73,10 @@ module beam_alignment_tb;
         $display("Initial Threshold Load");
         for(int beam_idx=0; beam_idx<NBEAMS; beam_idx = beam_idx+2) begin
             update_reg = 1'b0;
-            thresh_reg = 18'd6050; 
+            thresh_reg = 18'd9000; 
             thresh_ce_reg[beam_idx +: 2] = 2'b10; // Load this threshold into A.
             @(posedge clk);
-            thresh_reg = 18'd6050; 
+            thresh_reg = 18'd9000; 
             thresh_ce_reg[beam_idx +: 2] = 2'b01; // Load this threshold into B.
             #1.75;
             @(posedge clk);
@@ -112,14 +114,22 @@ module beam_alignment_tb;
                     for(int j=0; j<NCHAN; j=j+1) begin : CHANNEL_FILL_DELAYED_PULSES
                         for(int k=0; k<NSAMP; k=k+1) begin : SAMPLE_FILL_DELAYED_PULSES
                             do begin
-                                stim_val = $dist_normal(seed, stim_mean, stim_sdev);
-                            end while(stim_val > 31 || stim_val < 0); // Don't leave 5 bit range please
-                            cycling_num = i*8+k - delay_array[ALIGNED_BEAM][j];
-                            if((cycling_num) < 5 && (cycling_num) > 0) begin : ADD_PULSE
-                                if(cycling_num%2 == 0) begin
-                                    stim_val = stim_val + 8;
+                                if($random() > 0) begin
+                                    stim_val = $dist_normal(seed, 15, stim_sdev);
                                 end else begin
-                                    stim_val = stim_val - 8;
+                                    stim_val = $dist_normal(seed, 16, stim_sdev);
+                                end
+                            end while(stim_val > 31 || stim_val < 0); // Don't leave 5 bit range please
+                            cycling_num = i*8+k + delay_array[ALIGNED_BEAM][j];
+                            cycling_offset = 8*50;
+                            if((cycling_num-cycling_offset) < 12 && (cycling_num-cycling_offset) > 0) begin : ADD_PULSE
+                                // if(j==0) begin
+                                //     $display($sformatf("Number: %1d, rotating: %1d", (cycling_num-cycling_offset), (cycling_num-cycling_offset)%4));
+                                // end
+                                if((cycling_num-cycling_offset)%4 > 1) begin
+                                    stim_val = stim_val + pulse_height/((cycling_num-cycling_offset)/3 + 1);
+                                end else begin
+                                    stim_val = stim_val - pulse_height/((cycling_num-cycling_offset)/3 + 1);
                                 end
                                 if(stim_val > 31) begin
                                     stim_val = 31;
