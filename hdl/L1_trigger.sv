@@ -59,8 +59,8 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
                 u_chain(
                     .wb_clk_i(wb_clk_i),
                     .wb_rst_i(wb_rst_i),
-                    `CONNECT_WBS_IFM( wb_bq_ , wb_bq_ BOO HISS NEED PROPER CROSSOVER),//L
-                    `CONNECT_WBS_IFM( wb_agc_ , wb_agc_ ),
+                    `CONNECT_WBS_IFS( wb_bq_ , wb_bq_ ),//L
+                    `CONNECT_WBS_IFS( wb_agc_ , wb_agc_ ),
                     .reset_i(reset_i), 
                     .aclk(aclk),
                     .dat_i(dat_i),

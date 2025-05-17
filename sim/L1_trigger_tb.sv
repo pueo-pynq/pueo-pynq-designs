@@ -3,10 +3,14 @@
 module L1_trigger_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "GAUSS_RAND";//"SINE";//"GAUSS_RAND";
+    parameter       THIS_STIM   = "GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
     parameter TARGET_RMS = 4;
+    parameter NCHAN = 8;
+    parameter NSAMP = 8;
+    parameter NBITS = 12;
     parameter NBEAMS = 2;
+    parameter ALIGNED_BEAM = 0;
 
     // PID control values. Note that this controller implementation cumulatively adds the output here
     // to the values. Other implementations therefore call this value "I". In a sense this is "P" for
@@ -22,7 +26,7 @@ module L1_trigger_tb;
     // AGC Parameters
     int AGC_offset [8] = {0,0,0,0,0,0,0,0};
 
-    localparam int INITIAL_SCALE = 2512;//4096;
+    localparam int INITIAL_SCALE = 2127;//found experimentally for sdvev = 100;
     int AGC_scale [8] = {INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE};//1024;
     // For a scale value of 32, 32/4096 = 1/128. With a pulse of 512 that becomes 4
     // This resulted in a value of 17 (16+1, so 1). I believe this is due to two fractional bits being removed? Maybe 3, with rounding.
@@ -33,6 +37,15 @@ module L1_trigger_tb;
     int stim_mean = 0;
     int stim_sdev = 100; // Note that max value is 2047 (and -2048)
     // int stim_clks = 500;//100007;
+
+    int stim_val = 0;
+    int cycling_num = 0;
+    int cycling_offset = 0;
+    int pulse_height = 400;//0;
+
+    // NOTE THE BIG-ENDIAN ARRAYS HERE
+    localparam int delay_array [0:(`BEAM_TOTAL)-1][0:NCHAN-1] = `BEAM_ANTENNA_DELAYS;
+
 
     // Sine scale
     int sine_scale = 1;
@@ -102,7 +115,7 @@ module L1_trigger_tb;
     endtask
 
     task do_read_agc; 
-        input [7:0] in_addr;
+        input [21:0] in_addr;
         output [31:0] out_data;
         begin 
             address_agc = in_addr; #1
@@ -225,7 +238,7 @@ module L1_trigger_tb;
 
             for (int bqidx=0; bqidx<2; bqidx = bqidx+1) begin: BQ_LOOP
 
-                $display($sformatf("Prepping Biquad %1d", bqidx));
+                $display($sformatf("Prepping Chan %1d Biquad %1d", idx, bqidx));
                 $display($sformatf("Notch at %1d MHz, Q at %1d", notch[bqidx], Q[bqidx]));
                 $display("Using moving notch");
                 // LOAD BIQUAD NOTCH COEFFICIENTS FROM A FILE
@@ -352,7 +365,10 @@ module L1_trigger_tb;
             #0.01;
             for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
                 // Check for complete AGC cycle
+                
                 do_read_agc(22'h000 + idx * 22'h100, read_in_val); // see if AGC is done
+                
+                $display($sformatf("CYCLING AGC %1d: read: %1d", idx, read_in_val));
                 if(read_in_val) begin: agc_ready
                     do_read_agc(22'h004 + idx * 22'h100, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 
                     do_read_agc(22'h008 + idx * 22'h100, agc_gt); // the 3 address bits select the register to read. Lets get agc_scale at 
@@ -384,8 +400,6 @@ module L1_trigger_tb;
     int clocks = 0;
     initial begin: STIM_LOOP
         #150;
-         if (THIS_STIM == "GAUSS_RAND") begin : GAUSS_RAND_RUN
-
         $display("Setup");
         for(int j=0; j<25; j=j+1) begin
             #1.75;
@@ -397,10 +411,10 @@ module L1_trigger_tb;
         $display("Initial Threshold Load");
         for(int beam_idx=0; beam_idx<NBEAMS; beam_idx = beam_idx+2) begin
             update_reg = 1'b0;
-            thresh_reg = 18'd9000; 
+            thresh_reg = 18'd19000; 
             thresh_ce_reg[beam_idx +: 2] = 2'b10; // Load this threshold into A.
             @(posedge aclk);
-            thresh_reg = 18'd9000; 
+            thresh_reg = 18'd19000; 
             thresh_ce_reg[beam_idx +: 2] = 2'b01; // Load this threshold into B.
             #1.75;
             @(posedge aclk);
@@ -419,6 +433,9 @@ module L1_trigger_tb;
         end
         $display("Initial Threshold Has Been Loaded");
 
+         if (THIS_STIM == "GAUSS_RAND") begin : GAUSS_RAND_RUN
+
+       
 
             $display("Beginning Random Gaussian Stimulus");
             
@@ -456,8 +473,41 @@ module L1_trigger_tb;
             end
             $display("Ending CW Stimulus (how did this even happen?)");
             
-        end else begin
-            $display("THIS_DESIGN set to something other");     
+        end else if (THIS_STIM == "GAUSS_RAND_PULSES") begin
+            $display("THIS_DESIGN set to GAUSS_RAND_PULSES");  
+            forever begin
+                for(int i=0; i<64; i++) begin: FILL_DELAYED_PULSES
+                    #0.01;
+                    @(posedge aclk);
+                    for(int j=0; j<NCHAN; j=j+1) begin : CHANNEL_FILL_DELAYED_PULSES
+                        for(int k=0; k<NSAMP; k=k+1) begin : SAMPLE_FILL_DELAYED_PULSES
+                            do begin
+                                stim_val = $dist_normal(seed, stim_mean, stim_sdev);
+                            end while(stim_val > 2047 || stim_val < -2048); // Don't leave 5 bit range please
+                            cycling_num = i*8+k + delay_array[ALIGNED_BEAM][j];
+                            cycling_offset = 8*50;
+                            if((cycling_num-cycling_offset) < 12 && (cycling_num-cycling_offset) > 0) begin : ADD_PULSE
+                                // if(j==0) begin
+                                //     $display($sformatf("Number: %1d, rotating: %1d", (cycling_num-cycling_offset), (cycling_num-cycling_offset)%4));
+                                // end
+                                if((cycling_num-cycling_offset)%4 > 1) begin
+                                    stim_val = stim_val + pulse_height/((cycling_num-cycling_offset)/3 + 1);
+                                end else begin
+                                    stim_val = stim_val - pulse_height/((cycling_num-cycling_offset)/3 + 1);
+                                end
+                                if(stim_val > 2047) begin
+                                    stim_val = 2047;
+                                end else if (stim_val < -2048) begin
+                                    stim_val = -2048;
+                                end
+                            end
+                            stim_vals[j][k] = stim_val;
+                            // in_data_reg[j][k*12 +: 12] = stim_val;
+                        end
+                        samples[j] = stim_vals[j];// Not sure it has to be iterated like this
+                    end
+                end
+            end   
         end
     end
     
