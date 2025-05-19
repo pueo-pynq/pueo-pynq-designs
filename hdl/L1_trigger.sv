@@ -10,11 +10,15 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         input wb_clk_i,
         input wb_rst_i,
 
-        // Wishbone stuff for writing in coefficients to the biquads
-        `TARGET_NAMED_PORTS_WB_IF( wb_bq_ , 22, 32 ), // Address width, data width. 
+        // One wishbone interface to control both AGC and Biquads
+        // Bit 12 differentiates between the two (0 for AGC, 1 for BQs)
+        `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ), // Address width, data width.
 
-        // Wishbone stuff for writing to the AGC
-        `TARGET_NAMED_PORTS_WB_IF( wb_agc_ , 22, 32 ), // Address width, data width.
+        // // Wishbone stuff for writing in coefficients to the biquads
+        // `TARGET_NAMED_PORTS_WB_IF( wb_bq_ , 22, 32 ), // Address width, data width. 
+
+        // // Wishbone stuff for writing to the AGC
+        // `TARGET_NAMED_PORTS_WB_IF( wb_agc_ , 22, 32 ), // Address width, data width.
 
         // Beam Thresholds
         input [17:0] thresh_i,
@@ -28,39 +32,41 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         
         output [NBEAMS-1:0] trigger_o
     );
-
-    // QUALITY OF LIFE FUNCTIONS
-
-    // UNPACK is 128 -> 96
-    function [95:0] unpack;
-        input [127:0] data_in;
-        integer i;
-        begin
-            for (i=0;i<8;i=i+1) begin
-                unpack[12*i +: 12] = data_in[(16*i+4) +: 12];
-            end
-        end
-    endfunction
-    // PACK is 96 -> 128
-    function [127:0] pack;
-        input [95:0] data_in;
-        integer i;
-        begin
-            for (i=0;i<8;i=i+1) begin
-                pack[(16*i+4) +: 12] = data_in[12*i +: 12];
-                pack[(16*i) +: 4] = {4{1'b0}};
-            end
-        end
-    endfunction    
-
+ 
+    // Wishbone connection split between AGC and Biquads
+    // Use bit 12 to differentiate, 0 for AGC 1 for Biquad
+    // These interfaces are host-named (M). Sine the ports of this module are target-named,
+    // there needs to be crossover
+    `DEFINE_WB_IF( agc_submodule_ , 22, 32);
+    `DEFINE_WB_IF( bq_submodule_ , 22, 32);
+    //  Top interface target (S)        Connection interface (M)
+    assign wb_ack_o = (wb_adr_i[12]) ? bq_submodule_ack_i : agc_submodule_ack_i;
+    assign wb_err_o = (wb_adr_i[12]) ? bq_submodule_err_i : agc_submodule_err_i;
+    assign wb_rty_o = (wb_adr_i[12]) ? bq_submodule_rty_i : agc_submodule_rty_i;
+    assign wb_dat_o = (wb_adr_i[12]) ? bq_submodule_dat_i : agc_submodule_dat_i;
+    
+    assign agc_submodule_cyc_o = wb_cyc_i && !wb_adr_i[12];
+    assign bq_submodule_cyc_o = wb_cyc_i && wb_adr_i[12];
+    assign agc_submodule_stb_o = wb_stb_i;
+    assign bq_submodule_stb_o = wb_stb_i;
+    assign agc_submodule_adr_o = wb_adr_i;
+    assign bq_submodule_adr_o = wb_adr_i;
+    assign agc_submodule_dat_o = wb_dat_i;
+    assign bq_submodule_dat_o = wb_dat_i;
+    assign agc_submodule_we_o = wb_we_i;
+    assign bq_submodule_we_o = wb_we_i;
+    assign agc_submodule_sel_o = wb_sel_i;
+    assign bq_submodule_sel_o = wb_sel_i;
 
 
     trigger_chain_x8_wrapper #(.AGC_TIMESCALE_REDUCTION_BITS(AGC_TIMESCALE_REDUCTION_BITS))
                 u_chain(
                     .wb_clk_i(wb_clk_i),
                     .wb_rst_i(wb_rst_i),
-                    `CONNECT_WBS_IFS( wb_bq_ , wb_bq_ ),//L
-                    `CONNECT_WBS_IFS( wb_agc_ , wb_agc_ ),
+                    // `CONNECT_WBS_IFS( wb_bq_ , wb_bq_ ),//L
+                    // `CONNECT_WBS_IFS( wb_agc_ , wb_agc_ ),
+                    `CONNECT_WBS_IFM( wb_bq_ , bq_submodule_ ),//L
+                    `CONNECT_WBS_IFM( wb_agc_ , agc_submodule_ ),
                     .reset_i(reset_i), 
                     .aclk(aclk),
                     .dat_i(dat_i),

@@ -118,7 +118,7 @@ module agc_wrapper(
         req_agc_tick <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 8'h0, AGC_MASK ) && wb_we_i && wb_sel_i[0] && wb_dat_i[0]);
         agc_reset <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 8'h0, AGC_MASK ) && wb_we_i && wb_sel_i[0] && wb_dat_i[2]);
         agc_scale_load <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 8'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[8]);
-        agc_offset_load <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 82'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[9]);
+        agc_offset_load <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 8'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[9]);
         agc_apply <= (state == IDLE) && (wb_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i, 8'h0, AGC_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[10]);
     
         // THIS IS SO DUMB I DON'T REALLY NEED TO WAIT
