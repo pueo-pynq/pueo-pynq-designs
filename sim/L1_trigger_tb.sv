@@ -176,11 +176,27 @@ module L1_trigger_tb;
         input [21:0] in_addr;
         input [31:0] in_data;
         begin
-            do_write_L1(in_addr + 22'h1000, in_data);
+            do_write_L1(in_addr + 22'h1000, in_data);// Assert addr[12]
         end
     endtask
 
-    
+    task do_write_trigger;
+        input [21:0] in_addr;
+        input [31:0] in_data;
+        begin
+            do_write_L1(in_addr + 22'h2000, in_data); // Assert addr[13]
+        end
+    endtask
+
+    task do_read_trigger;
+        input [21:0] in_addr;
+        output [31:0] out_data;
+        begin
+            do_read_L1(in_addr + 22'h4000, out_data);// Assert addr[13]
+        end
+    endtask
+
+
     task do_write_agc;
         input [21:0] in_addr;
         input [31:0] in_data;
@@ -196,6 +212,8 @@ module L1_trigger_tb;
             do_read_L1(in_addr, out_data);
         end
     endtask
+
+        
 
     // ADC samples, both indexed and as one array
     reg [11:0] samples [7:0] [7:0];
@@ -261,9 +279,9 @@ module L1_trigger_tb;
                     .wb_rst_i(1'b0),
                     `CONNECT_WBS_IFM( wb_ , wb_L1_ ),
 
-                    .thresh_i(thresh),
-                    .thresh_ce_i(thresh_ce),
-                    .update_i(update),
+                    // .thresh_i(thresh),
+                    // .thresh_ce_i(thresh_ce),
+                    // .update_i(update),
                     
                     .reset_i(reset), 
                     .aclk(aclk),
@@ -302,6 +320,19 @@ module L1_trigger_tb;
         // Let everything get settled
         @(posedge wbclk);
         @(posedge wbclk);
+
+        @(posedge wbclk);
+        #1.75;
+        $display("Initial Threshold Load");
+        for(int beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin
+            do_write_trigger(22'h100 + beam_idx, 18'd19000); // Load the trigger threshold
+            do_write_trigger(22'h200 + beam_idx, 1); // Execute CE
+            $display($sformatf("Prepping Beam %1d", beam_idx));
+        end
+        do_write_trigger(22'h0, 2); // Update all the thresholds
+
+        $display("Initial Threshold Has Been Loaded");
+
 
         for(int idx=0; idx<8; idx=idx+1) begin: BQ_PREP_BY_CHAN
 
@@ -475,32 +506,6 @@ module L1_trigger_tb;
             @(posedge aclk);
         end
         #1.75;
-        @(posedge aclk);
-        #1.75;
-        $display("Initial Threshold Load");
-        for(int beam_idx=0; beam_idx<NBEAMS; beam_idx = beam_idx+2) begin
-            update_reg = 1'b0;
-            thresh_reg = 18'd19000; 
-            thresh_ce_reg[beam_idx +: 2] = 2'b10; // Load this threshold into A.
-            @(posedge aclk);
-            thresh_reg = 18'd19000; 
-            thresh_ce_reg[beam_idx +: 2] = 2'b01; // Load this threshold into B.
-            #1.75;
-            @(posedge aclk);
-            update_reg = 1'b1; // Apply new thresholds
-            #1.75;
-            @(posedge aclk);
-            #1.75;
-            thresh_ce_reg[beam_idx +: 2] = 2'b00;
-            update_reg = 1'b0;
-            @(posedge aclk);
-            #1.75;
-        end
-        for(int i=0; i<64; i=i+1) begin  
-            @(posedge aclk);
-            #1.75;
-        end
-        $display("Initial Threshold Has Been Loaded");
 
          if (THIS_STIM == "GAUSS_RAND") begin : GAUSS_RAND_RUN
 
