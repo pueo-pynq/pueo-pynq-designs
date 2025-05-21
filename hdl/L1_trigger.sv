@@ -48,7 +48,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     wire[NBEAMS-1:0][31:0] trigger_count_out;
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
-    reg [31:0] response_reg; // Pass back # of triggers on WB
+    reg [31:0] response_reg = 31'h0; // Pass back # of triggers on WB
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [NBEAMS-1:0][31:0] trigger_count_reg; // Pass back # of triggers on WB
@@ -73,14 +73,14 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     reg wb_ack_o_reg = (state == ACK);
     reg wb_err_o_reg = 1'b0;
     reg wb_rty_o_reg = 1'b0;
-    reg wb_dat_o_reg = response_reg;
+    reg [31:0] wb_dat_o_reg = response_reg;
 
     assign wb_ack_o = wb_ack_o_reg;
     assign wb_err_o = wb_err_o_reg;
     assign wb_rty_o = wb_rty_o_reg;
     assign wb_dat_o = wb_dat_o_reg;
 
-    always @* begin // Maybe could change to just wb_adr_i, could test this later
+    always @(posedge wb_clk_i) begin // Maybe could change to just wb_adr_i, could test this later
         case(wb_adr_i[13:12])
             2'b00: begin // Control AGC
                 wb_ack_o_reg = agc_submodule_ack_i;
