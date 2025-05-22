@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
 
+`define DLYFF #0.1
 // Pre-trigger filter chain.
 // 1) Shannon-Whitaker low pass filter
 // 2) Two Biquads in serial (to be used as notches)
@@ -80,25 +81,26 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     assign wb_rty_o = wb_rty_o_reg;
     assign wb_dat_o = wb_dat_o_reg;
 
-    always @(posedge wb_clk_i) begin // Maybe could change to just wb_adr_i, could test this later
+    always @(*) begin // Maybe could change to just wb_adr_i, could test this later
+    // always @(posedge wb_clk_i) begin // Maybe could change to just wb_adr_i, could test this later
         case(wb_adr_i[13:12])
             2'b00: begin // Control AGC
-                wb_ack_o_reg = agc_submodule_ack_i;
-                wb_err_o_reg = agc_submodule_err_i;
-                wb_rty_o_reg = agc_submodule_rty_i;
-                wb_dat_o_reg = agc_submodule_dat_i;
+                wb_ack_o_reg =  `DLYFF agc_submodule_ack_i;
+                wb_err_o_reg =  `DLYFF agc_submodule_err_i;
+                wb_rty_o_reg =  `DLYFF agc_submodule_rty_i;
+                wb_dat_o_reg =  `DLYFF agc_submodule_dat_i;
             end
             2'b01: begin // Control BQ
-                wb_ack_o_reg = bq_submodule_ack_i;
-                wb_err_o_reg = bq_submodule_err_i;
-                wb_rty_o_reg = bq_submodule_rty_i;
-                wb_dat_o_reg = bq_submodule_dat_i;
+                wb_ack_o_reg =  `DLYFF bq_submodule_ack_i;
+                wb_err_o_reg =  `DLYFF bq_submodule_err_i;
+                wb_rty_o_reg =  `DLYFF bq_submodule_rty_i;
+                wb_dat_o_reg =  `DLYFF bq_submodule_dat_i;
             end
             default: begin // Control Trigger Threshold
-                wb_ack_o_reg = (state == ACK);
-                wb_err_o_reg = 1'b0;
-                wb_rty_o_reg = 1'b0;
-                wb_dat_o_reg = response_reg;
+                wb_ack_o_reg =  `DLYFF (state == ACK);
+                wb_err_o_reg =  `DLYFF 1'b0;
+                wb_rty_o_reg =  `DLYFF 1'b0;
+                wb_dat_o_reg =  `DLYFF response_reg;
             end
         endcase
     end
@@ -112,8 +114,10 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     
     wire wb_threshold_cyc_i;
 
+    // FIX the acks here to prevent simulation time slipping from delaying de-assertion (BAD)
     assign agc_submodule_cyc_o = wb_cyc_i && !wb_adr_i[12] && !wb_adr_i[13];
     assign bq_submodule_cyc_o = wb_cyc_i && wb_adr_i[12] && !wb_adr_i[13];
+    
     assign wb_threshold_cyc_i = wb_cyc_i && wb_adr_i[13];
     assign agc_submodule_stb_o = wb_stb_i;
     assign bq_submodule_stb_o = wb_stb_i;

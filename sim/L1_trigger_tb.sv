@@ -163,6 +163,7 @@ module L1_trigger_tb;
         input [21:0] in_addr;
         output [31:0] out_data;
         begin 
+            @(posedge wbclk);
             address_L1 = in_addr; #1
             #1 use_L1 = 1; wr_L1 = 0;
             @(posedge wbclk);
@@ -432,10 +433,6 @@ module L1_trigger_tb;
                 dummy = $sscanf(str, "%d", coeff_from_file);
                 do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h1C, coeff_from_file);  // E_GF
 
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h00, 32'd1 );     // Update
-                
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h00, 32'd1 );     // Update
-                
                 do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h00, 32'd1 );     // Update
             end 
         end
