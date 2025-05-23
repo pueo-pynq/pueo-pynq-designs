@@ -6,7 +6,9 @@
 // 1) Shannon-Whitaker low pass filter
 // 2) Two Biquads in serial (to be used as notches)
 // 3) AGC and 12->5 bit conversion
-module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2, parameter WBCLKTYPE = "PSCLK", parameter CLKTYPE = "ACLK")(  
+module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2,
+                    parameter WBCLKTYPE = "PSCLK", parameter CLKTYPE = "ACLK",
+                    parameter TRIGGER_COUNTS=375000000)( // at 375 MHz this will count for 1 s  
 
         input wb_clk_i,
         input wb_rst_i,
@@ -145,13 +147,13 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     reg  [NBEAMS-1:0] trigger_threshold_ce_delayed = {NBEAMS{1'b0}};
     wire [NBEAMS-1:0] trigger_threshold_ce_aclk;
 
-    genvar i;
-    generate
-        for(i=0; i<NBEAMS; i++) begin
-            flag_sync u_CE_flag(.in_clkA(trigger_threshold_ce_delayed[i]),.clkA(wb_clk_i),
-                                .out_clkB(trigger_threshold_ce_aclk[i]),.clkB(aclk));
-        end
-    endgenerate
+    // genvar i;
+    // generate
+    //     for(i=0; i<NBEAMS; i++) begin
+    //         flag_sync u_CE_flag(.in_clkA(trigger_threshold_ce_delayed[i]),.clkA(wb_clk_i),
+    //                             .out_clkB(trigger_threshold_ce_aclk[i]),.clkB(aclk));
+    //     end
+    // endgenerate
 
     // Update all thresholds
     reg trigger_threshold_update = 0;
@@ -172,9 +174,37 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     flag_sync u_done_flag(.in_clkA(trigger_count_done_aclk),.clkA(aclk),
                           .out_clkB(trigger_count_done_wbclk),.clkB(wb_clk_i));
 
+
+
+    // Trigger rate sampling period control
+    reg trigger_count_ce = 0; // Clock enable for counting out the 375 MHz clock
+    wire trigger_time_done; // Signal that the trigger counting period is over
+    always @(posedge aclk) begin
+        if (trigger_count_aclk) trigger_count_ce <= 1'b1; // If you see a flag to start, enable clock
+        else if (trigger_time_done) trigger_count_ce <= 1'b0; // If the period is over, stop counting
+    end        
+    // Move trigger_time_done to trigger_count_done_aclk, with a delay of 6 aclks
+    reg [5:0] trigger_done_delay = {6{1'b0}};
+    always @(posedge aclk) trigger_done_delay <= { trigger_done_delay[4:0], trigger_time_done };
+    assign trigger_count_done_aclk = trigger_done_delay[5];
+
+    // This is where we will count out the clocks in our trigger sampling period (shared by all beams) 
+    dsp_counter_terminal_count #(.FIXED_TCOUNT("TRUE"),
+                                .FIXED_TCOUNT_VALUE(TRIGGER_COUNTS),
+                                .HALT_AT_TCOUNT("TRUE"))
+        u_agc_timer(.clk_i(aclk),
+                    .rst_i(trigger_count_aclk), // Reset the counter with new request flag
+                    .count_i(trigger_count_ce),
+                    .tcount_reached_o(trigger_time_done));
+
+
     genvar beam_idx;
     generate
-        for(beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin : CE_FLAGS_AND_THRESHOLD                      
+        for(beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin : CE_FLAGS_AND_THRESHOLD  
+            flag_sync u_CE_flag(.in_clkA(trigger_threshold_ce_delayed[beam_idx]),.clkA(wb_clk_i),
+                                .out_clkB(trigger_threshold_ce_aclk[beam_idx]),.clkB(aclk));     
+
+
             always @(posedge wb_clk_i) begin
                 if((state == IDLE) && (wb_threshold_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i,  10'h200 + beam_idx, THRESHOLD_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[0]))
                 begin
@@ -189,8 +219,8 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         if (req_trigger_count) trigger_count_done <= 0;
         else if (trigger_count_done_wbclk) trigger_count_done <= 1;
         
-        if (trigger_count_done_wbclk) begin
-            trigger_count_reg <= trigger_count_out;
+        if (trigger_count_done_wbclk) begin // flag that a counting cycle just completed
+            trigger_count_reg <= trigger_count_out; // Contains all results
         end            
 
         // Write command flags. These handle writes to address 0x00.
@@ -227,7 +257,8 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         end
     end
 
-    // TODO: WILL WANT TO PUT SOME TRIGGER TIMERS IN HERE
+    // TODO: Add actual trigger counter (with holdoff, although maybe add later)
+    // REPLACE THE ASSIGNMENT OF THESE WIRES WITH THE ACTUAL COUNTS
     assign trigger_count_out = {NBEAMS{32'd100}};
 
     wire  [7:0][39:0] data_stage_connection;
