@@ -8,7 +8,8 @@
 // 3) AGC and 12->5 bit conversion
 module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2,
                     parameter WBCLKTYPE = "PSCLK", parameter CLKTYPE = "ACLK",
-                    parameter TRIGGER_COUNTS=375000000)( // at 375 MHz this will count for 1 s  
+                    parameter TRIGGER_COUNTS=375000000,
+                    parameter HOLDOFF_CLOCKS=16)( // at 375 MHz this will count for 1 s  
 
         input wb_clk_i,
         input wb_rst_i,
@@ -48,12 +49,17 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     localparam [FSM_BITS-1:0] ACK = 4;
     reg [FSM_BITS-1:0] state = IDLE;    
 
+    wire [NBEAMS-1:0] trigger_signal_bit_o;
     wire[NBEAMS-1:0][31:0] trigger_count_out;
+    reg [NBEAMS-1:0][$clog2(HOLDOFF_CLOCKS):0] holdoff_delay = {NBEAMS{($clog2(HOLDOFF_CLOCKS)+1){1'b0}}};
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
-    reg [31:0] response_reg = 31'h0; // Pass back # of triggers on WB
+    reg [31:0] response_reg = 31'h0; // Pass back trigger count information
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
+    reg [NBEAMS-1:0][31:0] trigger_count_wb_reg; // Pass back # of triggers on WB
+
+    (* CUSTOM_CC_DST = CLKTYPE *)
     reg [NBEAMS-1:0][31:0] trigger_count_reg; // Pass back # of triggers on WB
 
     // (* CUSTOM_CC_DST = WBCLKTYPE *)
@@ -116,7 +122,6 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     
     wire wb_threshold_cyc_i;
 
-    // FIX the acks here to prevent simulation time slipping from delaying de-assertion (BAD)
     assign agc_submodule_cyc_o = wb_cyc_i && !wb_adr_i[12] && !wb_adr_i[13];
     assign bq_submodule_cyc_o = wb_cyc_i && wb_adr_i[12] && !wb_adr_i[13];
     
@@ -192,19 +197,34 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     dsp_counter_terminal_count #(.FIXED_TCOUNT("TRUE"),
                                 .FIXED_TCOUNT_VALUE(TRIGGER_COUNTS),
                                 .HALT_AT_TCOUNT("TRUE"))
-        u_agc_timer(.clk_i(aclk),
-                    .rst_i(trigger_count_aclk), // Reset the counter with new request flag
-                    .count_i(trigger_count_ce),
-                    .tcount_reached_o(trigger_time_done));
+        u_trigger_timer(.clk_i(aclk),
+                        .rst_i(trigger_count_aclk), // Reset the counter with new request flag
+                        .count_i(trigger_count_ce),
+                        .tcount_reached_o(trigger_time_done));
 
 
     genvar beam_idx;
     generate
         for(beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin : CE_FLAGS_AND_THRESHOLD  
+            // Flag to clock enable for a specific beam threshold load in
             flag_sync u_CE_flag(.in_clkA(trigger_threshold_ce_delayed[beam_idx]),.clkA(wb_clk_i),
                                 .out_clkB(trigger_threshold_ce_aclk[beam_idx]),.clkB(aclk));     
 
+            // Increment the counter if there is a trigger and not in holdoff
+            always @(posedge aclk) begin
+                
+                if(trigger_count_aclk) begin // Reset for a new count
+                    trigger_count_reg[beam_idx] <= 0;
+                    holdoff_delay[beam_idx] <= 0; // reset the holdoff
+                end else if(trigger_count_ce && trigger_signal_bit_o[beam_idx] && (holdoff_delay[beam_idx]==0)) begin
+                    trigger_count_reg[beam_idx] <= trigger_count_reg[beam_idx] + 1;
+                    holdoff_delay[beam_idx] <= HOLDOFF_CLOCKS; // Begin the holdoff
+                end else if(holdoff_delay[beam_idx]>0) begin
+                    holdoff_delay[beam_idx] <= holdoff_delay[beam_idx] - 1; // Count down from last trigger count
+                end
+            end
 
+            // Stage a threshold in for a specific beam
             always @(posedge wb_clk_i) begin
                 if((state == IDLE) && (wb_threshold_cyc_i && wb_stb_i && `ADDR_MATCH( wb_adr_i,  10'h200 + beam_idx, THRESHOLD_MASK ) && wb_we_i && wb_sel_i[1] && wb_dat_i[0]))
                 begin
@@ -220,7 +240,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         else if (trigger_count_done_wbclk) trigger_count_done <= 1;
         
         if (trigger_count_done_wbclk) begin // flag that a counting cycle just completed
-            trigger_count_reg <= trigger_count_out; // Contains all results
+            trigger_count_wb_reg <= trigger_count_out; // Contains all results
         end            
 
         // Write command flags. These handle writes to address 0x00.
@@ -244,7 +264,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         
         // If reading, load the response in
         if (state == READ) begin
-            if(wb_adr_i[8]) response_reg <= trigger_count_reg[wb_adr_i[7:0]];
+            if(wb_adr_i[8]) response_reg <= trigger_count_wb_reg[wb_adr_i[7:0]];
             else response_reg = trigger_count_done;
         end
         // If writing to a threshold, put it in the appropriate register
@@ -257,9 +277,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         end
     end
 
-    // TODO: Add actual trigger counter (with holdoff, although maybe add later)
-    // REPLACE THE ASSIGNMENT OF THESE WIRES WITH THE ACTUAL COUNTS
-    assign trigger_count_out = {NBEAMS{32'd100}};
+    assign trigger_count_out = trigger_count_reg;
 
     wire  [7:0][39:0] data_stage_connection;
 
@@ -276,6 +294,8 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
                     .dat_i(dat_i),
                     .dat_o(data_stage_connection));
 
+    //TODO: Add holdoff at this stage!
+    assign trigger_o = trigger_signal_bit_o;
 
     beamform_trigger #(.NBEAMS(NBEAMS)) 
         u_trigger(
@@ -286,7 +306,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
             .thresh_ce_i(trigger_threshold_ce_aclk),
             .update_i(trigger_threshold_update_aclk),        
             
-            .trigger_o(trigger_o));
+            .trigger_o(trigger_signal_bit_o));
 
 
 

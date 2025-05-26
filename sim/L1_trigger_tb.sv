@@ -4,6 +4,8 @@ module L1_trigger_tb;
     
     parameter       THIS_DESIGN = "BASIC";
     parameter       THIS_STIM   = "GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
+    parameter       TESTING_L1_CYCLE = "TRUE";
+    parameter       TRIGGER_COUNTS = 3750; // 10 Microseconds
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
     parameter TARGET_RMS = 4;
     parameter NCHAN = 8;
@@ -193,7 +195,7 @@ module L1_trigger_tb;
         input [21:0] in_addr;
         output [31:0] out_data;
         begin
-            do_read_L1(in_addr + 22'h4000, out_data);// Assert addr[13]
+            do_read_L1(in_addr + 22'h2000, out_data);// Assert addr[13]
         end
     endtask
 
@@ -274,16 +276,12 @@ module L1_trigger_tb;
     generate
         if (THIS_DESIGN == "BASIC") begin : BASIC
 
-            L1_trigger #(.AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS))
+            L1_trigger #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
+                            .TRIGGER_COUNTS(TRIGGER_COUNTS))
                 u_L1_trigger(
                     .wb_clk_i(wbclk),
                     .wb_rst_i(1'b0),
                     `CONNECT_WBS_IFM( wb_ , wb_L1_ ),
-
-                    // .thresh_i(thresh),
-                    // .thresh_ce_i(thresh_ce),
-                    // .update_i(update),
-                    
                     .reset_i(reset), 
                     .aclk(aclk),
                     .dat_i(sample_arr),
@@ -295,6 +293,9 @@ module L1_trigger_tb;
 
         end
     endgenerate
+
+
+    reg [31:0] trigger_cycle_done = 32'd0;
 
     int fc; //, fd, f, fdebug; // File Descriptors for I/O of test
     int code, dummy, data_from_file; // Used for file I/O intermediate steps
@@ -314,7 +315,7 @@ module L1_trigger_tb;
     int f_outs [8] = {0,0,0,0,0,0,0,0};
 
 
-    // BQ initialization and AGC cycle
+    // Threshold, BQ initialization and AGC cycle
     initial begin : SETUP
 
         #200;
@@ -326,14 +327,14 @@ module L1_trigger_tb;
         #1.75;
         $display("Initial Threshold Load");
         for(int beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin
-            do_write_trigger(22'h100 + beam_idx, 18'd19000); // Load the trigger threshold
+            // Note: 475 is 19000/40. Magic number hardcoded nonsense.
+            do_write_trigger(22'h100 + beam_idx, 18'd19000 - beam_idx*(17000)); // Load the trigger threshold
             do_write_trigger(22'h200 + beam_idx, 1); // Execute CE
             $display($sformatf("Prepping Beam %1d", beam_idx));
         end
         do_write_trigger(22'h0, 2); // Update all the thresholds
 
         $display("Initial Threshold Has Been Loaded");
-
 
         for(int idx=0; idx<8; idx=idx+1) begin: BQ_PREP_BY_CHAN
 
@@ -461,12 +462,22 @@ module L1_trigger_tb;
             do_write_agc(22'h000 + idx * 22'h100, 12'h001);//12'h001); // Start running AGC measurement cycle
             
             $display($sformatf("FINISHED AGC %1d", idx));
-        end
+        end        
+        do_write_trigger(22'h0, 1); // Begin a trigger count cycle
         forever begin
             #0.01;
+            if(TESTING_L1_CYCLE == "TRUE") begin
+                $display("Checking Trigger Cycle");    
+                do_read_trigger(22'h0, trigger_cycle_done); // Begin a trigger count cycle
+                if(trigger_cycle_done) begin
+                    $display($sformatf("Trigger Cycle Done: %1d",trigger_cycle_done));        
+                    do_write_trigger(22'h0, 1); // Begin a trigger count cycle
+                    trigger_cycle_done = 32'd0; // Probably unnecessary
+                end
+            end
             for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
+
                 // Check for complete AGC cycle
-                
                 do_read_agc(22'h000 + idx * 22'h100, read_in_val); // see if AGC is done
                 
                 $display($sformatf("CYCLING AGC %1d: read: %1d", idx, read_in_val));
@@ -493,7 +504,6 @@ module L1_trigger_tb;
                 end
             end 
         end
-
     end
 
 
@@ -508,9 +518,7 @@ module L1_trigger_tb;
         end
         #1.75;
 
-         if (THIS_STIM == "GAUSS_RAND") begin : GAUSS_RAND_RUN
-
-       
+        if (THIS_STIM == "GAUSS_RAND") begin : GAUSS_RAND_RUN
 
             $display("Beginning Random Gaussian Stimulus");
             
