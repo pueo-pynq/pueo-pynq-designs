@@ -3,9 +3,9 @@
 module L1_trigger_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
+    parameter       THIS_STIM   = "GAUSS_RAND";//_PULSES";//"SINE";//"GAUSS_RAND";
     parameter       TESTING_L1_CYCLE = "TRUE";
-    parameter       TRIGGER_COUNTS = 3750; // 10 Microseconds
+    parameter       TRIGGER_CLOCKS = 3750; // 10 Microseconds
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
     parameter TARGET_RMS = 4;
     parameter NCHAN = 8;
@@ -277,7 +277,7 @@ module L1_trigger_tb;
         if (THIS_DESIGN == "BASIC") begin : BASIC
 
             L1_trigger #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
-                            .TRIGGER_COUNTS(TRIGGER_COUNTS))
+                            .TRIGGER_CLOCKS(TRIGGER_CLOCKS))
                 u_L1_trigger(
                     .wb_clk_i(wbclk),
                     .wb_rst_i(1'b0),
@@ -296,6 +296,7 @@ module L1_trigger_tb;
 
 
     reg [31:0] trigger_cycle_done = 32'd0;
+    reg [31:0] trigger_threshold_value = 32'd0;
 
     int fc; //, fd, f, fdebug; // File Descriptors for I/O of test
     int code, dummy, data_from_file; // Used for file I/O intermediate steps
@@ -328,7 +329,7 @@ module L1_trigger_tb;
         $display("Initial Threshold Load");
         for(int beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin
             // Note: 475 is 19000/40. Magic number hardcoded nonsense.
-            do_write_trigger(22'h100 + beam_idx, 18'd19000 - beam_idx*(17000)); // Load the trigger threshold
+            do_write_trigger(22'h100 + beam_idx, 18'd19000 - beam_idx*(19000-2500)); // Load the trigger threshold
             do_write_trigger(22'h200 + beam_idx, 1); // Execute CE
             $display($sformatf("Prepping Beam %1d", beam_idx));
         end
@@ -470,7 +471,11 @@ module L1_trigger_tb;
                 $display("Checking Trigger Cycle");    
                 do_read_trigger(22'h0, trigger_cycle_done); // Begin a trigger count cycle
                 if(trigger_cycle_done) begin
-                    $display($sformatf("Trigger Cycle Done: %1d",trigger_cycle_done));        
+                    $display($sformatf("Trigger Cycle Done: %1d",trigger_cycle_done));
+                    for(int beam_idx=0; beam_idx<8; beam_idx=beam_idx+1) begin  
+                        do_read_trigger(22'h200 + beam_idx, trigger_threshold_value);   
+                        $display($sformatf("Trigger Threshold Value: %1d",trigger_threshold_value));    
+                    end
                     do_write_trigger(22'h0, 1); // Begin a trigger count cycle
                     trigger_cycle_done = 32'd0; // Probably unnecessary
                 end

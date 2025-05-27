@@ -2,23 +2,17 @@
 `include "interfaces.vh"
 
 `define DLYFF #0.1
-// Pre-trigger filter chain.
-// 1) Shannon-Whitaker low pass filter
-// 2) Two Biquads in serial (to be used as notches)
-// 3) AGC and 12->5 bit conversion
-module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2,
+
+module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2,
                     parameter WBCLKTYPE = "PSCLK", parameter CLKTYPE = "ACLK",
                     parameter TRIGGER_CLOCKS=375000000,
-                    parameter HOLDOFF_CLOCKS=16)( // at 375 MHz this will count for 1 s  
+                    parameter HOLDOFF_CLOCKS=16,
+                    parameter STARTING_TARGET=100)( // at 375 MHz this will count for 1 s  
 
         input wb_clk_i,
         input wb_rst_i,
 
-        // One wishbone interface to control AGC, Biquads, and Thresholds
-        // Bit 12 differentiates between the two (0 for AGC, 1 for BQs)
         `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ), // Address width, data width.
-        
-        // Control to capture the output to the RAM buffer
         input reset_i, 
         input aclk,
         input [7:0][95:0] dat_i,
@@ -28,6 +22,33 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
 
     `define ADDR_MATCH( addr, val, mask ) ( ( addr & mask ) == (val & mask) )
     localparam [9:0] THRESHOLD_MASK = {10{1'b1}};
+    localparam NBITS_KP = 32;
+    localparam NFRAC_KP = 10;
+
+    // Pass commands not about trigger rate control loop down
+    `DEFINE_WB_IF( L1_submodule_ , 22, 32);
+
+    // //  Top interface target (S)        Connection interface (M)
+    assign wb_ack_o = (wb_adr_i[14]) ? L1_submodule_ack_i : (state == ACK);
+    assign wb_err_o = (wb_adr_i[14]) ? L1_submodule_err_i : 1'b0;
+    assign wb_rty_o = (wb_adr_i[14]) ? L1_submodule_rty_i : 1'b0;
+    assign wb_dat_o = (wb_adr_i[14]) ? L1_submodule_dat_i : response_reg;
+    
+    wire wb_control_loop_cyc_i;
+
+    assign L1_submodule_cyc_o = wb_cyc_i && !wb_adr_i[14];
+    assign wb_control_loop_cyc_i = wb_cyc_i && wb_adr_i[14];
+    assign L1_submodule_stb_o = wb_stb_i;
+    assign wb_control_loop_stb_o = wb_stb_i;
+    assign L1_submodule_adr_o = wb_adr_i;
+    assign wb_control_loop_adr_o = wb_adr_i;
+    assign L1_submodule_dat_o = wb_dat_i;
+    assign wb_control_loop_dat_o = wb_dat_i;
+    assign L1_submodule_we_o = wb_we_i;
+    assign wb_control_loop_we_o = wb_we_i;
+    assign L1_submodule_sel_o = wb_sel_i;
+    assign wb_control_loop_sel_o = wb_sel_i;
+
 
     // State machine control
     localparam FSM_BITS = 3;
@@ -38,94 +59,26 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     localparam [FSM_BITS-1:0] ACK = 4;
     reg [FSM_BITS-1:0] state = IDLE;    
 
-    wire [NBEAMS-1:0] trigger_signal_bit_o;
-    wire[NBEAMS-1:0][31:0] trigger_count_out;
-    reg [NBEAMS-1:0][$clog2(HOLDOFF_CLOCKS):0] holdoff_delay = {NBEAMS{($clog2(HOLDOFF_CLOCKS)+1){1'b0}}};
-
+   
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [31:0] response_reg = 31'h0; // Pass back trigger count information
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
-    reg [NBEAMS-1:0][31:0] trigger_count_wb_reg; // Pass back # of triggers on WB
+    reg [31:0] trigger_count_wb_reg; // Pass back # of triggers on WB
 
-    (* CUSTOM_CC_DST = CLKTYPE *)
-    reg [NBEAMS-1:0][31:0] trigger_count_reg; // Pass back # of triggers on WB
+    (* CUSTOM_CC_DST = WBCLKTYPE *)
+    reg [31:0] trigger_threshold_wb_reg; // Pass back threshold value on WB
 
-    // (* CUSTOM_CC_DST = WBCLKTYPE *)
-    // reg thresh_ack_reg = 1'b0;
-
-    // (* CUSTOM_CC_DST = WBCLKTYPE *)
-    // reg thresh_err_reg = 1'b0;
-
-    // (* CUSTOM_CC_DST = WBCLKTYPE *)
-    // reg thresh_rty_reg = 1'b0;
+    (* CUSTOM_CC_DST = WBCLKTYPE *)
+    reg [NBITS_KP-1:0] trigger_control_K_P; // P Parameter for control loop. 
+                                            // This is the fraction of error value to change threshold by.
 
 
-    // Wishbone connection split between AGC, Biquads, and Trigger Rate
-    // Use bits 13 and 12 to differentiate, 00 for AGC, 01 for Biquad, 10 for Trigger Rate
-    // These interfaces are host-named (M). Sine the ports of this module are target-named,
-    // there needs to be crossover
-    `DEFINE_WB_IF( agc_submodule_ , 22, 32);
-    `DEFINE_WB_IF( bq_submodule_ , 22, 32);
-
-    reg wb_ack_o_reg = (state == ACK);
-    reg wb_err_o_reg = 1'b0;
-    reg wb_rty_o_reg = 1'b0;
-    reg [31:0] wb_dat_o_reg = response_reg;
-
-    assign wb_ack_o = wb_ack_o_reg;
-    assign wb_err_o = wb_err_o_reg;
-    assign wb_rty_o = wb_rty_o_reg;
-    assign wb_dat_o = wb_dat_o_reg;
-
-    always @(*) begin // Maybe could change to just wb_adr_i, could test this later
-    // always @(posedge wb_clk_i) begin // Maybe could change to just wb_adr_i, could test this later
-        case(wb_adr_i[13:12])
-            2'b00: begin // Control AGC
-                wb_ack_o_reg =  `DLYFF agc_submodule_ack_i;
-                wb_err_o_reg =  `DLYFF agc_submodule_err_i;
-                wb_rty_o_reg =  `DLYFF agc_submodule_rty_i;
-                wb_dat_o_reg =  `DLYFF agc_submodule_dat_i;
-            end
-            2'b01: begin // Control BQ
-                wb_ack_o_reg =  `DLYFF bq_submodule_ack_i;
-                wb_err_o_reg =  `DLYFF bq_submodule_err_i;
-                wb_rty_o_reg =  `DLYFF bq_submodule_rty_i;
-                wb_dat_o_reg =  `DLYFF bq_submodule_dat_i;
-            end
-            default: begin // Control Trigger Threshold
-                wb_ack_o_reg =  `DLYFF (state == ACK);
-                wb_err_o_reg =  `DLYFF 1'b0;
-                wb_rty_o_reg =  `DLYFF 1'b0;
-                wb_dat_o_reg =  `DLYFF response_reg;
-            end
-        endcase
-    end
-
-    // These are replaced with the case statement above
-    // //  Top interface target (S)        Connection interface (M)
-    // assign wb_ack_o = (wb_adr_i[12]) ? bq_submodule_ack_i : agc_submodule_ack_i;
-    // assign wb_err_o = (wb_adr_i[12]) ? bq_submodule_err_i : agc_submodule_err_i;
-    // assign wb_rty_o = (wb_adr_i[12]) ? bq_submodule_rty_i : agc_submodule_rty_i;
-    // assign wb_dat_o = (wb_adr_i[12]) ? bq_submodule_dat_i : agc_submodule_dat_i;
-    
-    wire wb_threshold_cyc_i;
-
-    assign agc_submodule_cyc_o = wb_cyc_i && !wb_adr_i[12] && !wb_adr_i[13];
-    assign bq_submodule_cyc_o = wb_cyc_i && wb_adr_i[12] && !wb_adr_i[13];
-    
-    assign wb_threshold_cyc_i = wb_cyc_i && wb_adr_i[13];
-    assign agc_submodule_stb_o = wb_stb_i;
-    assign bq_submodule_stb_o = wb_stb_i;
-    assign agc_submodule_adr_o = wb_adr_i;
-    assign bq_submodule_adr_o = wb_adr_i;
-    assign agc_submodule_dat_o = wb_dat_i;
-    assign bq_submodule_dat_o = wb_dat_i;
-    assign agc_submodule_we_o = wb_we_i;
-    assign bq_submodule_we_o = wb_we_i;
-    assign agc_submodule_sel_o = wb_sel_i;
-    assign bq_submodule_sel_o = wb_sel_i;
-
+    // TODO Plan:   Use two state machines, one for this module's communication
+    //              and one for managing the thresholds/rates. Both can be on the WB clock  
+    //              since this is slow control.
+    // Note: Completely unimplemented below this point
+    // Note Note: Need to check whether this additional layer hurts timing. Don't expect so.
 
     ////////////////////////////////////////////////////////
     //////        Wishbone FSM stolen from AGC        //////
@@ -141,13 +94,6 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     reg  [NBEAMS-1:0] trigger_threshold_ce_delayed = {NBEAMS{1'b0}};
     wire [NBEAMS-1:0] trigger_threshold_ce_aclk;
 
-    // genvar i;
-    // generate
-    //     for(i=0; i<NBEAMS; i++) begin
-    //         flag_sync u_CE_flag(.in_clkA(trigger_threshold_ce_delayed[i]),.clkA(wb_clk_i),
-    //                             .out_clkB(trigger_threshold_ce_aclk[i]),.clkB(aclk));
-    //     end
-    // endgenerate
 
     // Update all thresholds
     reg trigger_threshold_update = 0;
@@ -255,15 +201,8 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         
         // If reading, load the response in
         if (state == READ) begin
-            if(wb_adr_i[8]) begin 
-                response_reg <= trigger_count_wb_reg[wb_adr_i[7:0]];
-            end
-            else if (wb_adr_i[9]) begin
-                response_reg <= {{14{1'b0}}, {threshold_regs[wb_adr_i[7:0]]}}; // Threshold is 18 bits
-            end
-            else begin
-                response_reg = trigger_count_done;
-            end
+            if(wb_adr_i[8]) response_reg <= trigger_count_wb_reg[wb_adr_i[7:0]];
+            else response_reg = trigger_count_done;
         end
         // If writing to a threshold, put it in the appropriate register
         if (state == WRITE) begin
@@ -279,32 +218,32 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
 
     wire  [7:0][39:0] data_stage_connection;
 
-    trigger_chain_x8_wrapper #(.AGC_TIMESCALE_REDUCTION_BITS(AGC_TIMESCALE_REDUCTION_BITS))
-                u_chain(
-                    .wb_clk_i(wb_clk_i),
-                    .wb_rst_i(wb_rst_i),
-                    // `CONNECT_WBS_IFS( wb_bq_ , wb_bq_ ),//L
-                    // `CONNECT_WBS_IFS( wb_agc_ , wb_agc_ ),
-                    `CONNECT_WBS_IFM( wb_bq_ , bq_submodule_ ),//L
-                    `CONNECT_WBS_IFM( wb_agc_ , agc_submodule_ ),
-                    .reset_i(reset_i), 
-                    .aclk(aclk),
-                    .dat_i(dat_i),
-                    .dat_o(data_stage_connection));
+    // trigger_chain_x8_wrapper #(.AGC_TIMESCALE_REDUCTION_BITS(AGC_TIMESCALE_REDUCTION_BITS))
+    //             u_chain(
+    //                 .wb_clk_i(wb_clk_i),
+    //                 .wb_rst_i(wb_rst_i),
+    //                 // `CONNECT_WBS_IFS( wb_bq_ , wb_bq_ ),//L
+    //                 // `CONNECT_WBS_IFS( wb_agc_ , wb_agc_ ),
+    //                 `CONNECT_WBS_IFM( wb_bq_ , bq_submodule_ ),//L
+    //                 `CONNECT_WBS_IFM( wb_agc_ , agc_submodule_ ),
+    //                 .reset_i(reset_i), 
+    //                 .aclk(aclk),
+    //                 .dat_i(dat_i),
+    //                 .dat_o(data_stage_connection));
 
-    //TODO: Add holdoff at this stage!
-    assign trigger_o = trigger_signal_bit_o;
+    // //TODO: Add holdoff at this stage!
+    // assign trigger_o = trigger_signal_bit_o;
 
-    beamform_trigger #(.NBEAMS(NBEAMS)) 
-        u_trigger(
-            .clk_i(aclk),
-            .data_i(data_stage_connection),
+    // beamform_trigger #(.NBEAMS(NBEAMS)) 
+    //     u_trigger(
+    //         .clk_i(aclk),
+    //         .data_i(data_stage_connection),
 
-            .thresh_i(threshold_writing),
-            .thresh_ce_i(trigger_threshold_ce_aclk),
-            .update_i(trigger_threshold_update_aclk),        
+    //         .thresh_i(threshold_writing),
+    //         .thresh_ce_i(trigger_threshold_ce_aclk),
+    //         .update_i(trigger_threshold_update_aclk),        
             
-            .trigger_o(trigger_signal_bit_o));
+    //         .trigger_o(trigger_signal_bit_o));
 
 
 
