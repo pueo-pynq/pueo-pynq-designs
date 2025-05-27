@@ -297,6 +297,7 @@ module L1_trigger_tb;
 
     reg [31:0] trigger_cycle_done = 32'd0;
     reg [31:0] trigger_threshold_value = 32'd0;
+    reg [31:0] trigger_count_value = 32'd0;
 
     int fc; //, fd, f, fdebug; // File Descriptors for I/O of test
     int code, dummy, data_from_file; // Used for file I/O intermediate steps
@@ -472,9 +473,11 @@ module L1_trigger_tb;
                 do_read_trigger(22'h0, trigger_cycle_done); // Begin a trigger count cycle
                 if(trigger_cycle_done) begin
                     $display($sformatf("Trigger Cycle Done: %1d",trigger_cycle_done));
-                    for(int beam_idx=0; beam_idx<8; beam_idx=beam_idx+1) begin  
+                    for(int beam_idx=0; beam_idx<NBEAMS; beam_idx=beam_idx+1) begin  
                         do_read_trigger(22'h200 + beam_idx, trigger_threshold_value);   
                         $display($sformatf("Trigger Threshold Value: %1d",trigger_threshold_value));    
+                        do_read_trigger(22'h100 + beam_idx, trigger_count_value);   
+                        $display($sformatf("Trigger Count Value: %1d",trigger_count_value));    
                     end
                     do_write_trigger(22'h0, 1); // Begin a trigger count cycle
                     trigger_cycle_done = 32'd0; // Probably unnecessary
