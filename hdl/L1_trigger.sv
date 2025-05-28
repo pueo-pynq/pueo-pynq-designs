@@ -262,7 +262,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
                 response_reg <= {{14{1'b0}}, {threshold_regs[wb_threshold_adr_i[7:0]]}}; // Threshold is 18 bits
             end
             else begin
-                response_reg = trigger_count_done;
+                response_reg <= {{31{1'b0}}, {trigger_count_done}};
             end
         end
         // If writing to a threshold, put it in the appropriate register

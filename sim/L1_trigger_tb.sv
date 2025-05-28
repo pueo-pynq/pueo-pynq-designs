@@ -130,7 +130,7 @@ module L1_trigger_tb;
 
     
     
-    // WB interface for BQ and AGC in L1
+    // WB interface for trigger ops
     reg [21:0] address_trigger = {22{1'b0}};
     reg [31:0] data_trigger_o = {32{1'b0}};
     reg [31:0] data_trigger_i;// = {32{1'b0}};
@@ -240,7 +240,7 @@ module L1_trigger_tb;
                     .wb_clk_i(wbclk),
                     .wb_rst_i(1'b0),
                     `CONNECT_WBS_IFM( wb_ , wb_L1_ ),
-                    `CONNECT_WBS_IFM( wb_thresholdz_ , wb_trigger_ ),
+                    `CONNECT_WBS_IFM( wb_threshold_ , wb_trigger_ ),
                     .reset_i(reset), 
                     .aclk(aclk),
                     .dat_i(sample_arr),
