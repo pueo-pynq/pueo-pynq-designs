@@ -59,79 +59,8 @@ module L1_trigger_tb;
     tb_rclk #(.PERIOD(10.0)) u_wbclk(.clk(wbclk));
     tb_rclk #(.PERIOD(5.0)) u_aclk(.clk(aclk));
 
-    // // Wishbone Communication 
-    // // For Biquad
-    // reg wr = 0;
-    // reg [21:0] address = {22{1'b0}};
-    // reg [31:0] data = {32{1'b0}};
-    // wire ack;
-    // `DEFINE_WB_IF( wb_ , 22, 32);
-    // assign wb_cyc_o = wr;
-    // assign wb_stb_o = wr;
-    // assign wb_we_o = wr;
-    // assign wb_sel_o = {4{wr}};
-    // assign wb_dat_o = data;
-    // assign wb_adr_o = address;
-    // assign ack = wb_ack_i;
 
-    // task do_write_bq; 
-    //     input [21:0] in_addr;
-    //     input [31:0] in_data;
-    //     begin
-    //         @(posedge wbclk);
-    //         #1 wr = 1; address = in_addr; data = in_data;
-    //         @(posedge wbclk);
-    //         while (!ack) #1 @(posedge wbclk); 
-    //         #1 wr = 0;
-    //     end
-    // endtask
-
-    // // For AGC (One channel at first)
-    // reg [21:0] address_agc = {22{1'b0}};
-    // reg [31:0] data_agc_o = {32{1'b0}};
-    // reg [31:0] data_agc_i;// = {32{1'b0}};
-    // wire ack_agc;
-    // `DEFINE_WB_IF( wb_agc_ , 22, 32);
-    // assign wb_agc_dat_o = data_agc_o;
-    // assign data_agc_i = wb_agc_dat_i;
-    // assign wb_agc_adr_o = address_agc;
-    // assign ack_agc = wb_agc_ack_i;
-
-    // reg use_agc = 0; // QOL tie these together if not ever implementing writing
-    // reg wr_agc = 0; // QOL tie these together if not ever implementing writing
-    // assign wb_agc_cyc_o = use_agc;
-    // assign wb_agc_stb_o = use_agc;
-    // assign wb_agc_we_o = wr_agc; // Tie this in too if only ever writing
-    // assign wb_agc_sel_o = {4{use_agc}};
-
-    // task do_write_agc; 
-    //     input [21:0] in_addr;
-    //     input [31:0] in_data;
-    //     begin
-    //         @(posedge wbclk);
-    //         #1 use_agc = 1; wr_agc=1; address_agc = in_addr; data_agc_o = in_data;
-    //         @(posedge wbclk);
-    //         while (!ack_agc) #1 @(posedge wbclk);  
-    //         #1 use_agc = 0; wr_agc=0;
-    //     end
-    // endtask
-
-    // task do_read_agc; 
-    //     input [21:0] in_addr;
-    //     output [31:0] out_data;
-    //     begin 
-    //         address_agc = in_addr; #1
-    //         #1 use_agc = 1; wr_agc = 0;
-    //         @(posedge wbclk);
-    //         while (!ack_agc) #1 @(posedge wbclk);  
-    //         out_data = data_agc_i;
-    //         #1 use_agc = 0;
-    //     end
-    // endtask
-
-
-
-    // All-purpose WB interface
+    // WB interface for BQ and AGC in L1
     reg [21:0] address_L1 = {22{1'b0}};
     reg [31:0] data_L1_o = {32{1'b0}};
     reg [31:0] data_L1_i;// = {32{1'b0}};
@@ -183,23 +112,6 @@ module L1_trigger_tb;
         end
     endtask
 
-    task do_write_trigger;
-        input [21:0] in_addr;
-        input [31:0] in_data;
-        begin
-            do_write_L1(in_addr + 22'h2000, in_data); // Assert addr[13]
-        end
-    endtask
-
-    task do_read_trigger;
-        input [21:0] in_addr;
-        output [31:0] out_data;
-        begin
-            do_read_L1(in_addr + 22'h2000, out_data);// Assert addr[13]
-        end
-    endtask
-
-
     task do_write_agc;
         input [21:0] in_addr;
         input [31:0] in_data;
@@ -216,7 +128,53 @@ module L1_trigger_tb;
         end
     endtask
 
-        
+    
+    
+    // WB interface for BQ and AGC in L1
+    reg [21:0] address_trigger = {22{1'b0}};
+    reg [31:0] data_trigger_o = {32{1'b0}};
+    reg [31:0] data_trigger_i;// = {32{1'b0}};
+    wire ack_trigger;
+    `DEFINE_WB_IF( wb_trigger_ , 22, 32);
+    assign wb_trigger_dat_o = data_trigger_o;
+    assign data_trigger_i = wb_trigger_dat_i;
+    assign wb_trigger_adr_o = address_trigger;
+    assign ack_trigger = wb_trigger_ack_i;
+
+    reg use_trigger = 0; // QOL tie these together if not ever implementing writing
+    reg wr_trigger = 0; // QOL tie these together if not ever implementing writing
+    assign wb_trigger_cyc_o = use_trigger;
+    assign wb_trigger_stb_o = use_trigger;
+    assign wb_trigger_we_o = wr_trigger; // Tie this in too if only ever writing
+    assign wb_trigger_sel_o = {4{use_trigger}};
+
+    task do_write_trigger; 
+        input [21:0] in_addr;
+        input [31:0] in_data;
+        begin
+            @(posedge wbclk);
+            #1 use_trigger = 1; wr_trigger=1; address_trigger = in_addr; data_trigger_o = in_data;
+            @(posedge wbclk);
+            while (!ack_trigger) #1 @(posedge wbclk);  
+            #1 use_trigger = 0; wr_trigger=0;
+        end
+    endtask
+
+    task do_read_trigger; 
+        input [21:0] in_addr;
+        output [31:0] out_data;
+        begin 
+            @(posedge wbclk);
+            address_trigger = in_addr; #1
+            #1 use_trigger = 1; wr_trigger = 0;
+            @(posedge wbclk);
+            while (!ack_trigger) #1 @(posedge wbclk);  
+            out_data = data_trigger_i;
+            #1 use_trigger = 0;
+        end
+    endtask
+
+
 
     // ADC samples, both indexed and as one array
     reg [11:0] samples [7:0] [7:0];
@@ -282,6 +240,7 @@ module L1_trigger_tb;
                     .wb_clk_i(wbclk),
                     .wb_rst_i(1'b0),
                     `CONNECT_WBS_IFM( wb_ , wb_L1_ ),
+                    `CONNECT_WBS_IFM( wb_thresholdz_ , wb_trigger_ ),
                     .reset_i(reset), 
                     .aclk(aclk),
                     .dat_i(sample_arr),
