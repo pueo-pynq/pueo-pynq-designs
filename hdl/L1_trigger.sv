@@ -1,5 +1,6 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
+`include "L1Beams_header.vh"
 
 `define DLYFF #0.1
 // Pre-trigger filter chain.
@@ -44,9 +45,10 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     localparam [FSM_BITS-1:0] ACK = 4;
     reg [FSM_BITS-1:0] state = IDLE;    
 
+    localparam HOLDOFF_BITS = $clog2(HOLDOFF_CLOCKS)+1;
     wire [NBEAMS-1:0] trigger_signal_bit_o;
     wire[NBEAMS-1:0][31:0] trigger_count_out;
-    reg [NBEAMS-1:0][$clog2(HOLDOFF_CLOCKS):0] holdoff_delay = {NBEAMS{($clog2(HOLDOFF_CLOCKS)+1){1'b0}}};
+    reg [NBEAMS-1:0][HOLDOFF_BITS-1:0] holdoff_delay = {NBEAMS{(HOLDOFF_BITS){1'b0}}};
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [31:0] response_reg = 31'h0; // Pass back trigger count information
@@ -66,10 +68,10 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     `DEFINE_WB_IF( agc_submodule_ , 22, 32);
     `DEFINE_WB_IF( bq_submodule_ , 22, 32);
 
-    reg wb_ack_o_reg = (state == ACK);
-    reg wb_err_o_reg = 1'b0;
-    reg wb_rty_o_reg = 1'b0;
-    reg [31:0] wb_dat_o_reg = response_reg;
+    // reg wb_ack_o_reg = (state == ACK);
+    // reg wb_err_o_reg = 1'b0;
+    // reg wb_rty_o_reg = 1'b0;
+    // reg [31:0] wb_dat_o_reg = response_reg;
 
     // assign wb_ack_o = wb_ack_o_reg;
     // assign wb_err_o = wb_err_o_reg;
@@ -150,12 +152,14 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     // endgenerate
 
     // Update all thresholds
+    (* CUSTOM_CC_SRC = WBCLKTYPE *)
     reg trigger_threshold_update = 0;
     wire trigger_threshold_update_aclk;
     flag_sync u_update_flag(.in_clkA(trigger_threshold_update),.clkA(wb_clk_i),
                             .out_clkB(trigger_threshold_update_aclk),.clkB(aclk));
 
     // Request trigger count
+    (* CUSTOM_CC_SRC = WBCLKTYPE *)
     reg req_trigger_count = 0;
     wire trigger_count_aclk;
     flag_sync u_tick_flag(.in_clkA(req_trigger_count),.clkA(wb_clk_i),
@@ -292,8 +296,12 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
                     .dat_i(dat_i),
                     .dat_o(data_stage_connection));
 
-    //TODO: Add holdoff at this stage!
-    assign trigger_o = trigger_signal_bit_o;
+    //TODO: TEST THIS HOLDOFF LOGIC
+    generate
+        for(beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin 
+            assign trigger_o[beam_idx] = trigger_signal_bit_o[beam_idx] && !(|holdoff_delay[beam_idx]);// holdoff_delay
+        end
+    endgenerate
 
     beamform_trigger #(.NBEAMS(NBEAMS)) 
         u_trigger(

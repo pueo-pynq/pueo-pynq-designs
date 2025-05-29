@@ -2,13 +2,15 @@
 `include "interfaces.vh"
 
 `define DLYFF #0.1
+`define STARTTHRESH 18'd19000
 
 module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2,
                     parameter WBCLKTYPE = "PSCLK", parameter CLKTYPE = "ACLK",
                     parameter TRIGGER_CLOCKS=375000000,// at 375 MHz this will count for 1 s  
                     parameter HOLDOFF_CLOCKS=16,
                     parameter STARTING_TARGET=100,
-                    parameter STARTING_KP=1)( 
+                    parameter STARTING_KP=1,
+                    parameter COUNT_MARGIN=10)( 
 
         input wb_clk_i,
         input wb_rst_i,
@@ -21,51 +23,42 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
         output [NBEAMS-1:0] trigger_o
     );
 
-    // function write_to_trigger (input [21:0] in_addr, input [31:0] in_data);
-	// begin
-    //     use_threshold_wb <= 1'b1;
-    //     wr_threshold_wb <= 1'b1;
-    //     address_threshold <= in_addr;
-    //     data_threshold_o <= in_data;
-	// end
-    // endfunction
-
     task do_write_to_trigger; 
         input [21:0] in_addr;
         input [31:0] in_data;
         begin
-            use_threshold_wb <= 1'b1;
-            wr_threshold_wb <= 1'b1;
-            address_threshold <= in_addr;
-            data_threshold_o <= in_data;
+            address_threshold = in_addr;
+            data_threshold_o = `DLYFF in_data;
+            use_threshold_wb = 1'b1;
+            wr_threshold_wb = 1'b1;
         end
     endtask
 
     task finish_write_cycle_trigger; 
         begin
-            use_threshold_wb <= 0'b1;
-            wr_threshold_wb <= 0'b1;
-            address_threshold <= 22'h0;
-            data_threshold_o <= 32'h0;
+            use_threshold_wb = 1'b0;
+            wr_threshold_wb = 1'b0;
+            address_threshold = 22'h0;
+            data_threshold_o = 32'h0;
         end
     endtask
 
     task do_read_req_trigger; 
         input [21:0] in_addr;
         begin
-            use_threshold_wb <= 1'b1;
-            wr_threshold_wb <= 0'b1;
-            address_threshold <= in_addr;
+            address_threshold = in_addr;
+            use_threshold_wb = 1'b1;
+            wr_threshold_wb = 1'b0;
         end
     endtask
 
     task finish_read_cycle_trigger; 
         output [31:0] out_data;
         begin
-            use_threshold_wb <= 0'b1;
-            wr_threshold_wb <= 0'b1;
-            address_threshold <= 22'h0;
-            out_data <= data_threshold_i;
+            out_data = wb_threshold_dat_i;
+            use_threshold_wb = 1'b0;
+            wr_threshold_wb = 1'b0;
+            address_threshold = 22'h0;
         end
     endtask
 
@@ -78,14 +71,22 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
     `DEFINE_WB_IF( wb_L1_submodule_ , 22, 32);
     
     `DEFINE_WB_IF( wb_threshold_ , 22, 32);
+    
+    (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [21:0] address_threshold = {22{1'b0}};
+
+    (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [31:0] data_threshold_o = {32{1'b0}};
-    reg [31:0] data_threshold_i;
+    //reg [31:0] data_threshold_i;
+    
+    (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg use_threshold_wb = 0; // QOL tie these together if not ever implementing writing
+    
+    (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg wr_threshold_wb = 0; // QOL tie these together if not ever implementing writing
 
     assign wb_threshold_dat_o = data_threshold_o;
-    assign data_threshold_i = wb_threshold_dat_i;
+    // assign data_threshold_i = wb_threshold_dat_i;
     assign wb_threshold_adr_o = address_threshold;
     assign wb_threshold_cyc_o = use_threshold_wb;
     assign wb_threshold_stb_o = use_threshold_wb;
@@ -100,8 +101,8 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
     
     wire wb_control_loop_cyc_i;
 
-    assign wb_L1_submodule_cyc_o = wb_cyc_i && !wb_adr_i[14];
-    assign wb_control_loop_cyc_i = wb_cyc_i && wb_adr_i[14];
+    assign wb_L1_submodule_cyc_o = wb_cyc_i && wb_adr_i[14];
+    assign wb_control_loop_cyc_i = wb_cyc_i && !wb_adr_i[14];
     assign wb_L1_submodule_stb_o = wb_stb_i;
     assign wb_L1_submodule_adr_o = wb_adr_i;
     assign wb_L1_submodule_dat_o = wb_dat_i;
@@ -112,24 +113,27 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [31:0] response_reg = 31'h0; // Pass back trigger count information
 
-    (* CUSTOM_CC_DST = WBCLKTYPE *)
-    reg [31:0] trigger_count_wb_reg; // Pass back # of triggers on WB
+    // (* CUSTOM_CC_DST = WBCLKTYPE *)
+    // reg [31:0] trigger_count_wb_reg; // Pass back # of triggers on WB
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [31:0] trigger_target_wb_reg = STARTING_TARGET; // The target number of triggers in the sample period
 
-    (* CUSTOM_CC_DST = WBCLKTYPE *)
-    reg [31:0] trigger_threshold_wb_reg; // Pass back threshold value on WB
+    // (* CUSTOM_CC_DST = WBCLKTYPE *)
+    // reg [31:0] trigger_threshold_wb_reg; // Pass back threshold value on WB
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [NBITS_KP-1:0] trigger_control_K_P = STARTING_KP; // P Parameter for control loop. 
                                             // This is the fraction of error value to change threshold by.
+    
+    (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the last measured counts (rates) here
+    reg [NBEAMS-1:0][31:0] trigger_count_reg = {NBEAMS{32{1'b0}}};
+
+    (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the to-be updated thresholds here
+    reg [NBEAMS-1:0][17:0] threshold_recalculated_regs = {NBEAMS{18{1'b0}}};
 
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the thresholds here
-    reg [NBEAMS-1:0][17:0] threshold_regs = {NBEAMS{18{1'b0}}};
-
-    (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the last measured counts (rates) here
-    reg [NBEAMS-1:0][31:0] trigger_count_reg = {NBEAMS{18{1'b0}}};
+    reg [NBEAMS-1:0][17:0] threshold_regs = {NBEAMS{`STARTTHRESH}};
 
     (* CUSTOM_CC_SRC = WBCLKTYPE *)
     reg [17:0] threshold_writing = {18{1'b0}};
@@ -199,20 +203,26 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
     localparam [THRESHOLD_FSM_BITS-1:0] THRESHOLD_WAITING = 1;
     localparam [THRESHOLD_FSM_BITS-1:0] THRESHOLD_READING = 2;
     localparam [THRESHOLD_FSM_BITS-1:0] THRESHOLD_CALCULATING = 3;
-    localparam [THRESHOLD_FSM_BITS-1:0] THRESHOLD_UPDATING = 4;
+    localparam [THRESHOLD_FSM_BITS-1:0] THRESHOLD_WRITING = 4;
+    localparam [THRESHOLD_FSM_BITS-1:0] THRESHOLD_APPLYING = 5;
+    localparam [THRESHOLD_FSM_BITS-1:0] THRESHOLD_UPDATING = 6;
+    localparam [THRESHOLD_FSM_BITS-1:0] THRESHOLD_BOOT_DELAY = 7;
 
-    lcoalparam COMMFSM_BITS = 2;
-    localparam [COMMFSM_BITS-1:0] COMM_SENDING = 0;
-    localparam [COMMFSM_BITS-1:0] COMM_WAITING = 1;
-    localparam [COMMFSM_BITS-1:0] COMM_CHECKING = 1;
-    // localparam [COMMFSM_BITS-1:0] THRESHOLD_READING = 2;
-    // localparam [COMMFSM_BITS-1:0] THRESHOLD_CALCULATING = 3;
-    // localparam [COMMFSM_BITS-1:0] THRESHOLD_UPDATING = 4;
+    localparam COMM_FSM_BITS = 2;
+    localparam [COMM_FSM_BITS-1:0] COMM_SENDING = 0;
+    localparam [COMM_FSM_BITS-1:0] COMM_WAITING = 1;
+    localparam [COMM_FSM_BITS-1:0] COMM_PROCESSING = 2;
+    // localparam [COMM_FSM_BITS-1:0] THRESHOLD_READING = 2;
+    // localparam [COMM_FSM_BITS-1:0] THRESHOLD_CALCULATING = 3;
+    // localparam [COMM_FSM_BITS-1:0] THRESHOLD_WRITING = 4;
 
-    reg [THRESHOLD_FSM_BITS-1:0] threshold_FSM_state = THRESHOLD_POLLING;  
+    reg [THRESHOLD_FSM_BITS-1:0] threshold_FSM_state = THRESHOLD_BOOT_DELAY;  
     reg [THRESHOLD_FSM_BITS-1:0] comm_FSM_state = COMM_SENDING;  
     reg [$clog2(NBEAMS)+1:0] beam_idx = 0; // Control what beam we are looking at
+    reg [4:0] boot_delay_count = 5'b11111;
 
+    // wire [NBEAMS][31:0] threshold_recalculated_wire_out;
+    
     /////////////////////////////////////////////////////////////////
     //////       Control Loop FSM For Downstream Control       //////
     /////////////////////////////////////////////////////////////////
@@ -220,61 +230,153 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
         
         // Determine what we are doing this cycle
         case (threshold_FSM_state)
-            THRESHOLD_POLLING: begin // Start a trigger count cycle
+            THRESHOLD_POLLING: begin // Start a trigger count cycle 0
                 if(comm_FSM_state == COMM_SENDING) begin
                     do_write_to_trigger(22'h0, 32'h1);
                     comm_FSM_state <= COMM_WAITING;
                 end else if(comm_FSM_state == COMM_WAITING) begin
                     if(wb_threshold_ack_i) begin // Command received, move on
                         finish_write_cycle_trigger();
-                        comm_FSM_state <= COMM_SENDING;
                         threshold_FSM_state <= THRESHOLD_WAITING;
+                        comm_FSM_state <= COMM_SENDING;
                     end
                 end
             end
-            THRESHOLD_WAITING: begin // Wait for count cycle to finish
+            THRESHOLD_WAITING: begin // Wait for count cycle to finish 1
                 if(comm_FSM_state == COMM_SENDING) begin
                     do_read_req_trigger(22'h0);
                     comm_FSM_state <= COMM_WAITING;
                 end else if(comm_FSM_state == COMM_WAITING) begin
                     if(wb_threshold_ack_i) begin // Command received, move on
                         finish_read_cycle_trigger(trigger_response);
-                        comm_FSM_state <= COMM_CHECKING;
+                        comm_FSM_state <= COMM_PROCESSING;
                     end
-                end else if(comm_FSM_state == COMM_CHECKING) begin
+                end else if(comm_FSM_state == COMM_PROCESSING) begin
                     if(trigger_response[0] == 1) begin // If the count cycle is done, move on
                         threshold_FSM_state <= THRESHOLD_READING;
+                        beam_idx <= 0;
+                        comm_FSM_state <= COMM_SENDING;
                     end else begin // If the count cycle isn't done, ask again next clock
                         comm_FSM_state <= COMM_SENDING;
                     end
                 end
             end
-            // if(beam_idx < NBEAMS) begin // Poll this beam
-            WRITE: threshold_FSM_state <= ACK;
-            READ: threshold_FSM_state <= ACK;
-            ACK: threshold_FSM_state <= IDLE;
-            default: threshold_FSM_state <= THRESHOLD_POLLING; // Should never go here
+            THRESHOLD_READING: begin // Loop over the beams, reading their most recent counts 2
+                if(beam_idx < NBEAMS) begin
+                    if(comm_FSM_state == COMM_SENDING) begin
+                        do_read_req_trigger(22'h100 + beam_idx); // Request a read of the trigger count
+                        comm_FSM_state <= COMM_WAITING;
+                    end else if(comm_FSM_state == COMM_WAITING) begin
+                        if(wb_threshold_ack_i) begin // Command received, move on
+                            finish_read_cycle_trigger(trigger_response);
+                            comm_FSM_state <= COMM_PROCESSING;
+                        end
+                    end else if(comm_FSM_state == COMM_PROCESSING) begin
+                        trigger_count_reg[beam_idx] <= trigger_response; // Record the count
+                        beam_idx <= beam_idx + 1; // Go to next beam
+                        comm_FSM_state <= COMM_SENDING; // Restart read cycle
+                    end
+                end else begin // Move on, and reset beam counter
+                    threshold_FSM_state <= THRESHOLD_CALCULATING;
+                    beam_idx <= 0;
+                end
+            end
+            THRESHOLD_CALCULATING: begin // Calculate the threshold updates from the recent trigger counts 3
+                if(beam_idx < NBEAMS) begin
+                    // Will figure out multiplication in the future
+                    // For now just simply raise or lower by set amount
+                    if(trigger_count_reg > (trigger_target_wb_reg + COUNT_MARGIN)) begin
+                        threshold_recalculated_regs[beam_idx] = threshold_regs[beam_idx] + trigger_control_K_P;
+                    end else if (trigger_count_reg < (trigger_target_wb_reg - COUNT_MARGIN)) begin
+                        threshold_recalculated_regs[beam_idx] = threshold_regs[beam_idx] - trigger_control_K_P;
+                    end
+                    beam_idx <= beam_idx + 1;
+                end else begin // Move on, and reset beam counter
+                    threshold_FSM_state <= THRESHOLD_WRITING;
+                    beam_idx <= 0;
+                end
+            end
+            THRESHOLD_WRITING: begin // Write the updated thresholds to the L1 trigger 4
+                if(beam_idx < NBEAMS) begin
+                    if(comm_FSM_state == COMM_SENDING) begin
+                        do_write_to_trigger(22'h100 + beam_idx, {{(32-18){1'b0}}, threshold_recalculated_regs[beam_idx]}); // Request a read of the trigger
+                        // do_write_to_trigger(22'h100 + beam_idx, threshold_recalculated_regs[wb_adr_i[7:0]]); // Request a read of the trigger
+                        
+                        // // TODO: FIGURE OUT X Here
+                        // //L
+                        // address_threshold = 22'h100 + beam_idx;
+                        // data_threshold_o = #1 threshold_recalculated_regs[beam_idx];
+                        // use_threshold_wb = 1'b1;
+                        // wr_threshold_wb = 1'b1;
+                        
+                        comm_FSM_state <= COMM_WAITING;
+                    end else if(comm_FSM_state == COMM_WAITING) begin
+                        if(wb_threshold_ack_i) begin // Command received, move on
+                            finish_write_cycle_trigger();
+                            comm_FSM_state <= COMM_SENDING;
+                            beam_idx <= beam_idx + 1;
+                        end
+                    end 
+                end else begin // Move on, reset beam counter
+                    threshold_FSM_state <= THRESHOLD_APPLYING;
+                    beam_idx <= 0;
+                end
+            end
+            THRESHOLD_APPLYING: begin // CE for each beam threshold 5
+                if(beam_idx < NBEAMS) begin
+                    if(comm_FSM_state == COMM_SENDING) begin
+                        do_write_to_trigger(22'h200 + beam_idx, 32'h1); // CE of this beam threshold
+                        comm_FSM_state <= COMM_WAITING;
+                    end else if(comm_FSM_state == COMM_WAITING) begin
+                        if(wb_threshold_ack_i) begin // Command received, move on
+                            finish_write_cycle_trigger();
+                            comm_FSM_state <= COMM_SENDING;
+                            beam_idx <= beam_idx + 1;
+                        end
+                    end 
+                end else begin
+                    threshold_FSM_state <= THRESHOLD_UPDATING;
+                    beam_idx <= 0;
+                end
+            end
+            THRESHOLD_UPDATING: begin // 6
+                if(comm_FSM_state == COMM_SENDING) begin
+                    do_write_to_trigger(22'h0 , 32'h2); // Update all thresholds at once
+                    comm_FSM_state <= COMM_WAITING;
+                end else if(comm_FSM_state == COMM_WAITING) begin
+                    if(wb_threshold_ack_i) begin // Command received, move on
+                        finish_write_cycle_trigger();
+                        comm_FSM_state <= COMM_SENDING;
+                        threshold_regs <= threshold_recalculated_regs;
+                        threshold_FSM_state <= THRESHOLD_POLLING;
+                    end
+                end 
+            end
+            default:begin // Boot delay 7
+                if(boot_delay_count > 0) boot_delay_count <= boot_delay_count-1;
+                 else threshold_FSM_state <= THRESHOLD_POLLING; // Should never go here
+            end
         endcase
         
-        // If reading, load the response in
-        if (state == READ) begin
-            // If bit [8] is 1, return the last-measured trigger count
-            // Else if bit [9] is 1, return the current trigger threshold
-            // Else return the loop parameter
-            if(wb_adr_i[8]) response_reg <= trigger_count_reg[wb_adr_i[7:0]];
-            else if(wb_adr_i[9]) response_reg <= {{(32-18){1'b0}}, threshold_regs[wb_adr_i[7:0]]};
-            else response_reg <= {{(32-NBITS_KP){1'b0}}, trigger_control_K_P};
-        end
-        // If writing to a threshold, put it in the appropriate register
-        if (state == WRITE) begin
-            // NO CURRENT NEED FOR WRITING
+        // // If reading, load the response in
+        // if (state == READ) begin
+        //     // If bit [8] is 1, return the last-measured trigger count
+        //     // Else if bit [9] is 1, return the current trigger threshold
+        //     // Else return the loop parameter
+        //     if(wb_adr_i[8]) response_reg <= trigger_count_reg[wb_adr_i[7:0]];
+        //     else if(wb_adr_i[9]) response_reg <= {{(32-18){1'b0}}, threshold_regs[wb_adr_i[7:0]]};
+        //     else response_reg <= {{(32-NBITS_KP){1'b0}}, trigger_control_K_P};
+        // end
+        // // If writing to a threshold, put it in the appropriate register
+        // if (state == WRITE) begin
+        //     // NO CURRENT NEED FOR WRITING
 
-            // if (wb_adr_i[8]) begin // The 8th bit is used to indicate a threshold write
-            //     if (wb_sel_i[0]) threshold_regs[wb_adr_i[7:0]][7:0] <= wb_dat_i[7:0];
-            //     if (wb_sel_i[1]) threshold_regs[wb_adr_i[7:0]][15:8] <= wb_dat_i[15:8];
-            //     if (wb_sel_i[2]) threshold_regs[wb_adr_i[7:0]][17:16] <= wb_dat_i[17:16];
-            // end             
-        end
+        //     // if (wb_adr_i[8]) begin // The 8th bit is used to indicate a threshold write
+        //     //     if (wb_sel_i[0]) threshold_regs[wb_adr_i[7:0]][7:0] <= wb_dat_i[7:0];
+        //     //     if (wb_sel_i[1]) threshold_regs[wb_adr_i[7:0]][15:8] <= wb_dat_i[15:8];
+        //     //     if (wb_sel_i[2]) threshold_regs[wb_adr_i[7:0]][17:16] <= wb_dat_i[17:16];
+        //     // end             
+        // end
     end
 
 
@@ -282,13 +384,13 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
     L1_trigger #(   .AGC_TIMESCALE_REDUCTION_BITS(AGC_TIMESCALE_REDUCTION_BITS), 
                     .TRIGGER_CLOCKS(TRIGGER_CLOCKS))
         u_L1_trigger(
-            .wb_clk_i(wbclk_i),
+            .wb_clk_i(wb_clk_i),
             .wb_rst_i(wb_rst_i),
             `CONNECT_WBS_IFM( wb_ , wb_L1_submodule_ ),
             `CONNECT_WBS_IFM( wb_threshold_ , wb_threshold_ ),
-            .reset_i(reset), 
+            .reset_i(reset_i), 
             .aclk(aclk),
-            .dat_i(sample_arr),
-            .trigger_o(trigger));
+            .dat_i(dat_i),
+            .trigger_o(trigger_o));
 
 endmodule
