@@ -285,9 +285,9 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
                 if(beam_idx < NBEAMS) begin
                     // Will figure out multiplication in the future
                     // For now just simply raise or lower by set amount
-                    if(trigger_count_reg > (trigger_target_wb_reg + COUNT_MARGIN)) begin
+                    if(trigger_count_reg[beam_idx] > (trigger_target_wb_reg + COUNT_MARGIN)) begin
                         threshold_recalculated_regs[beam_idx] = threshold_regs[beam_idx] + trigger_control_K_P;
-                    end else if (trigger_count_reg < (trigger_target_wb_reg - COUNT_MARGIN)) begin
+                    end else if (trigger_count_reg[beam_idx] < (trigger_target_wb_reg - COUNT_MARGIN)) begin
                         threshold_recalculated_regs[beam_idx] = threshold_regs[beam_idx] - trigger_control_K_P;
                     end
                     beam_idx <= beam_idx + 1;
