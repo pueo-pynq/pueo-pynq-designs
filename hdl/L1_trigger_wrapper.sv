@@ -2,7 +2,7 @@
 `include "interfaces.vh"
 
 `define DLYFF #0.1
-`define STARTTHRESH 18'd19000
+`define STARTTHRESH 18'd3500
 
 module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2,
                     parameter WBCLKTYPE = "PSCLK", parameter CLKTYPE = "ACLK",
@@ -130,7 +130,7 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
     reg [NBEAMS-1:0][31:0] trigger_count_reg = {NBEAMS{32{1'b0}}};
 
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the to-be updated thresholds here
-    reg [NBEAMS-1:0][17:0] threshold_recalculated_regs = {NBEAMS{18{1'b0}}};
+    reg [NBEAMS-1:0][17:0] threshold_recalculated_regs = {NBEAMS{`STARTTHRESH}};
 
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the thresholds here
     reg [NBEAMS-1:0][17:0] threshold_regs = {NBEAMS{`STARTTHRESH}};
@@ -290,6 +290,7 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
                     end else if (trigger_count_reg[beam_idx] < (trigger_target_wb_reg - COUNT_MARGIN)) begin
                         threshold_recalculated_regs[beam_idx] = threshold_regs[beam_idx] - trigger_control_K_P;
                     end
+                    // TODO: Clip this
                     beam_idx <= beam_idx + 1;
                 end else begin // Move on, and reset beam counter
                     threshold_FSM_state <= THRESHOLD_WRITING;
@@ -354,7 +355,7 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
             end
             default:begin // Boot delay 7
                 if(boot_delay_count > 0) boot_delay_count <= boot_delay_count-1;
-                 else threshold_FSM_state <= THRESHOLD_POLLING; // Should never go here
+                else threshold_FSM_state <= THRESHOLD_WRITING; // Should never go here
             end
         endcase
         

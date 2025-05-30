@@ -192,7 +192,7 @@ module L1_trigger_wrapper_tb;
                                     .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
                                     .STARTING_TARGET(50), // Target triggers per period
                                     .COUNT_MARGIN(5), // +- Margin on triggers per period
-                                    .STARTING_KP(1000)) // Threshold change amount per correction
+                                    .STARTING_KP(100)) // Threshold change amount per correction
                 u_L1_trigger(
                     .wb_clk_i(wbclk),
                     .wb_rst_i(1'b0),
