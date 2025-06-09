@@ -111,7 +111,7 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
 
    
     (* CUSTOM_CC_DST = WBCLKTYPE *)
-    reg [31:0] response_reg = 31'h0; // Pass back trigger count information
+    reg [31:0] response_reg = 32'h0; // Pass back trigger count information
 
     // (* CUSTOM_CC_DST = WBCLKTYPE *)
     // reg [31:0] trigger_count_wb_reg; // Pass back # of triggers on WB
@@ -135,8 +135,8 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the thresholds here
     reg [NBEAMS-1:0][17:0] threshold_regs = {NBEAMS{`STARTTHRESH}};
 
-    (* CUSTOM_CC_SRC = WBCLKTYPE *)
-    reg [17:0] threshold_writing = {18{1'b0}};
+    // (* CUSTOM_CC_SRC = WBCLKTYPE *)
+    // reg [17:0] threshold_writing = {18{1'b0}};
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [31:0] trigger_response = 32'h0; // L1 trigger replies
@@ -145,7 +145,6 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
     // TODO Plan:   Use two state machines, one for this module's communication
     //              and one for managing the thresholds/rates. Both can be on the WB clock  
     //              since this is slow control.
-    // Note: Completely unimplemented below this point
     // Note Note: Need to check whether this additional layer hurts timing. Don't expect so.
 
 

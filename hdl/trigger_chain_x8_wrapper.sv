@@ -133,7 +133,7 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
                 .wb_clk_i(wb_clk_i),
                 .wb_rst_i(wb_rst_i),
                 `CONNECT_WBS_IFM( wb_bq_ , wb_bq_connect_ ),
-                `CONNECT_WBS_IFM( wb_agc_ , wb_agc_connect_ ),
+                `CONNECT_WBS_IFM( wb_agc_controller_ , wb_agc_connect_ ),
                 .reset_i(reset_i), 
                 .aclk(aclk),
                 .dat_i(dat_i[idx]),
