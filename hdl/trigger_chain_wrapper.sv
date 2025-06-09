@@ -131,7 +131,7 @@ module trigger_chain_wrapper #(parameter AGC_TIMESCALE_REDUCTION = 4)(
     reg [31:0] response_reg = 32'h0; // Pass back AGC information
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
-    reg [7:0][31:0] agc_info_reg = {8{32{1'b0}}}; // Store of downstream AGC info
+    reg [5:0][31:0] agc_module_info_reg = {6{32{1'b0}}}; // Store of downstream AGC info
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [16:0] agc_control_scale_delta = STARTING_SCALE_DELTA; // change amount 
@@ -140,10 +140,10 @@ module trigger_chain_wrapper #(parameter AGC_TIMESCALE_REDUCTION = 4)(
     reg [15:0] agc_control_offset_delta = STARTING_OFFSET_DELTA; // change amount 
 
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the to-be updated agcs here
-    reg [NBEAMS-1:0][16:0] agc_recalculated_scale_regs = {NBEAMS{`STARTSCALE}};
+    reg [16:0] agc_recalculated_scale_reg = `STARTSCALE;
     
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the to-be updated agcs here
-    reg [NBEAMS-1:0][15:0] agc_recalculated_offset_regs = {NBEAMS{`STARTOFFSET}};
+    reg [15:0] agc_recalculated_offset_reg = `STARTOFFSET;
 
     // (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the agcs here
     // reg [NBEAMS-1:0][17:0] agc_regs = {NBEAMS{`STARTTHRESH}};
@@ -187,7 +187,7 @@ module trigger_chain_wrapper #(parameter AGC_TIMESCALE_REDUCTION = 4)(
                 endcase
                 // response_reg <= agc_info_reg[wb_agc_controller_adr_i[3:0]];
             end else begin
-                response_reg <= agc_info_reg[wb_agc_controller_adr_i[3:0]];
+                response_reg <= agc_module_info_reg[wb_agc_controller_adr_i[3:0]];
             end
         end
         // If writing to a threshold, put it in the appropriate register
@@ -204,7 +204,185 @@ module trigger_chain_wrapper #(parameter AGC_TIMESCALE_REDUCTION = 4)(
 
 
 
+    // Downstream State machine control
+    localparam AGC_MODULE_FSM_BITS = 4;
+    localparam [AGC_MODULE_FSM_BITS-1:0] AGC_MODULE_RESETTING = 8;
+    localparam [AGC_MODULE_FSM_BITS-1:0] AGC_MODULE_POLLING = 0;
+    localparam [AGC_MODULE_FSM_BITS-1:0] AGC_MODULE_WAITING = 1;
+    localparam [AGC_MODULE_FSM_BITS-1:0] AGC_MODULE_READING = 2;
+    localparam [AGC_MODULE_FSM_BITS-1:0] AGC_MODULE_CALCULATING = 3;
+    localparam [AGC_MODULE_FSM_BITS-1:0] AGC_MODULE_WRITING = 4;
+    localparam [AGC_MODULE_FSM_BITS-1:0] AGC_MODULE_APPLYING = 5;
+    localparam [AGC_MODULE_FSM_BITS-1:0] AGC_MODULE_UPDATING = 6;
+    localparam [AGC_MODULE_FSM_BITS-1:0] AGC_MODULE_BOOT_DELAY = 7;
 
+    localparam COMM_FSM_BITS = 2;
+    localparam [COMM_FSM_BITS-1:0] COMM_SENDING = 0;
+    localparam [COMM_FSM_BITS-1:0] COMM_WAITING = 1;
+    localparam [COMM_FSM_BITS-1:0] COMM_PROCESSING = 2;
+    // localparam [COMM_FSM_BITS-1:0] AGC_MODULE_READING = 2;
+    // localparam [COMM_FSM_BITS-1:0] AGC_MODULE_CALCULATING = 3;
+    // localparam [COMM_FSM_BITS-1:0] AGC_MODULE_WRITING = 4;
+
+    reg [AGC_MODULE_FSM_BITS-1:0] agc_module_FSM_state = AGC_MODULE_BOOT_DELAY;  
+    reg [AGC_MODULE_FSM_BITS-1:0] comm_FSM_state = COMM_SENDING;  
+    reg [2:0] agc_module_info_idx = 0; // Control what agc data we are looking at
+    reg [4:0] boot_delay_count = 5'b11111;
+    
+    /////////////////////////////////////////////////////////////////
+    //////       Control Loop FSM For Downstream Control       //////
+    /////////////////////////////////////////////////////////////////
+    always @(posedge wb_clk_i) begin
+        
+        // Determine what we are doing this cycle
+        case (agc_module_FSM_state)
+            AGC_MODULE_RESETTING: begin // Reset AGC Cycle 8
+                if(comm_FSM_state == COMM_SENDING) begin
+                    do_write_to_agc(22'h0, 32'h04); // Reset signal
+                    comm_FSM_state <= COMM_WAITING;
+                end else if(comm_FSM_state == COMM_WAITING) begin
+                    if(wb_agc_module_ack_i) begin // Command received, move on
+                        finish_write_cycle_agc();
+                        agc_module_FSM_state <= AGC_MODULE_POLLING;
+                        comm_FSM_state <= COMM_SENDING;
+                    end
+                end
+            end
+            AGC_MODULE_POLLING: begin // Start an agc sample cycle 0
+                if(comm_FSM_state == COMM_SENDING) begin
+                    do_write_to_agc(22'h0, 32'h01);
+                    comm_FSM_state <= COMM_WAITING;
+                end else if(comm_FSM_state == COMM_WAITING) begin
+                    if(wb_agc_module_ack_i) begin // Command received, move on
+                        finish_write_cycle_agc();
+                        agc_module_FSM_state <= AGC_MODULE_WAITING;
+                        comm_FSM_state <= COMM_SENDING;
+                    end
+                end
+            end
+            AGC_MODULE_WAITING: begin // Wait for agc cycle to finish 1
+                if(comm_FSM_state == COMM_SENDING) begin
+                    do_read_req_agc(22'h0);
+                    comm_FSM_state <= COMM_WAITING;
+                end else if(comm_FSM_state == COMM_WAITING) begin
+                    if(wb_agc_module_ack_i) begin // Command received, move on
+                        finish_read_cycle_agc(agc_module_response);
+                        comm_FSM_state <= COMM_PROCESSING;
+                    end
+                end else if(comm_FSM_state == COMM_PROCESSING) begin
+                    if(agc_module_response[0] == 1) begin // If the agc cycle is done, move on
+                        agc_module_FSM_state <= AGC_MODULE_READING;
+                        agc_module_info_idx <= 0;
+                        comm_FSM_state <= COMM_SENDING;
+                    end else begin // If the count cycle isn't done, ask again next clock
+                        comm_FSM_state <= COMM_SENDING;
+                    end
+                end
+            end
+            AGC_MODULE_READING: begin // Read the agc status information 2
+                if(agc_module_info_idx < 6) begin
+                    if(comm_FSM_state == COMM_SENDING) begin
+                        do_read_req_agc({17'h0, agc_module_info_idx, 2'b00}); // Request a read of the trigger count
+                        comm_FSM_state <= COMM_WAITING;
+                    end else if(comm_FSM_state == COMM_WAITING) begin
+                        if(wb_agc_module_ack_i) begin // Command received, move on
+                            finish_read_cycle_agc(agc_module_response);
+                            comm_FSM_state <= COMM_PROCESSING;
+                        end
+                    end else if(comm_FSM_state == COMM_PROCESSING) begin
+                        agc_module_info[agc_module_info_idx] <= agc_module_response; // Record the count
+                        agc_module_info_idx <= agc_module_info_idx + 1; // Go to next beam
+                        comm_FSM_state <= COMM_SENDING; // Restart read cycle
+                    end
+                end else begin // Move on, and reset beam counter
+                    agc_module_FSM_state <= AGC_MODULE_CALCULATING;
+                    agc_module_info_idx <= 0;
+                end
+            end
+            AGC_MODULE_CALCULATING: begin // Calculate the threshold updates from the recent trigger counts 3
+
+                // Will figure out multiplication in the future
+                // For now just simply raise or lower by set amount
+
+                // SCALE
+                agc_module_info_reg[1] // sq_accum
+
+                // OFFSET
+                agc_module_info_reg[2] // gt
+                agc_module_info_reg[3] // lt
+
+                if(trigger_count_reg[agc_module_info] > (trigger_target_wb_reg + COUNT_MARGIN)) begin
+                    threshold_recalculated_regs[agc_module_info] = threshold_regs[agc_module_info] + trigger_control_K_P;
+                end else if (trigger_count_reg[agc_module_info] < (trigger_target_wb_reg - COUNT_MARGIN)) begin
+                    threshold_recalculated_regs[agc_module_info] = threshold_regs[agc_module_info] - trigger_control_K_P;
+                end
+
+                agc_module_info <= agc_module_info + 1;
+                agc_module_FSM_state <= AGC_MODULE_WRITING;
+
+            end
+            AGC_MODULE_WRITING: begin // Write the updated thresholds to the L1 trigger 4
+                if(agc_module_info < NBEAMS) begin
+                    if(comm_FSM_state == COMM_SENDING) begin
+                        do_write_to_agc(22'h100 + agc_module_info, {{(32-18){1'b0}}, threshold_recalculated_regs[agc_module_info]}); // Request a read of the trigger
+                        // do_write_to_agc(22'h100 + agc_module_info, threshold_recalculated_regs[wb_adr_i[7:0]]); // Request a read of the trigger
+                        
+                        // // TODO: FIGURE OUT X Here
+                        // //L
+                        // address_threshold = 22'h100 + agc_module_info;
+                        // data_threshold_o = #1 threshold_recalculated_regs[agc_module_info];
+                        // use_threshold_wb = 1'b1;
+                        // wr_threshold_wb = 1'b1;
+                        
+                        comm_FSM_state <= COMM_WAITING;
+                    end else if(comm_FSM_state == COMM_WAITING) begin
+                        if(wb_agc_module_ack_i) begin // Command received, move on
+                            finish_write_cycle_agc();
+                            comm_FSM_state <= COMM_SENDING;
+                            agc_module_info <= agc_module_info + 1;
+                        end
+                    end 
+                end else begin // Move on, reset beam counter
+                    agc_module_FSM_state <= AGC_MODULE_APPLYING;
+                    agc_module_info <= 0;
+                end
+            end
+            AGC_MODULE_APPLYING: begin // CE for each beam threshold 5
+                if(agc_module_info < NBEAMS) begin
+                    if(comm_FSM_state == COMM_SENDING) begin
+                        do_write_to_agc(22'h200 + agc_module_info, 32'h1); // CE of this beam threshold
+                        comm_FSM_state <= COMM_WAITING;
+                    end else if(comm_FSM_state == COMM_WAITING) begin
+                        if(wb_agc_module_ack_i) begin // Command received, move on
+                            finish_write_cycle_agc();
+                            comm_FSM_state <= COMM_SENDING;
+                            agc_module_info <= agc_module_info + 1;
+                        end
+                    end 
+                end else begin
+                    agc_module_FSM_state <= AGC_MODULE_UPDATING;
+                    agc_module_info <= 0;
+                end
+            end
+            AGC_MODULE_UPDATING: begin // 6
+                if(comm_FSM_state == COMM_SENDING) begin
+                    do_write_to_agc(22'h0 , 32'h2); // Update all thresholds at once
+                    comm_FSM_state <= COMM_WAITING;
+                end else if(comm_FSM_state == COMM_WAITING) begin
+                    if(wb_agc_module_ack_i) begin // Command received, move on
+                        finish_write_cycle_agc();
+                        comm_FSM_state <= COMM_SENDING;
+                        threshold_regs <= threshold_recalculated_regs;
+                        agc_module_FSM_state <= AGC_MODULE_POLLING;
+                    end
+                end 
+            end
+            default:begin // Boot delay 7
+                if(boot_delay_count > 0) boot_delay_count <= boot_delay_count-1;
+                else agc_module_FSM_state <= AGC_MODULE_WRITING; // Should never go here
+            end
+        endcase
+    end
 
     wire [95:0] data_stage_connection [1:0]; // In 12 bits since that's what the LPF works in
 
