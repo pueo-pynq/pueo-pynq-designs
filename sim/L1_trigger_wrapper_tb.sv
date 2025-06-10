@@ -29,7 +29,7 @@ module L1_trigger_wrapper_tb;
     // AGC Parameters
     int AGC_offset [8] = {0,0,0,0,0,0,0,0};
 
-    localparam int INITIAL_SCALE = 2127;//found experimentally for sdvev = 100;
+    localparam int INITIAL_SCALE = 1800;//2127;//found experimentally for sdvev = 100;
     int AGC_scale [8] = {INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE};//1024;
     // For a scale value of 32, 32/4096 = 1/128. With a pulse of 512 that becomes 4
     // This resulted in a value of 17 (16+1, so 1). I believe this is due to two fractional bits being removed? Maybe 3, with rounding.
@@ -37,14 +37,14 @@ module L1_trigger_wrapper_tb;
 
     // Gaussian Random Parameters
     int seed = 1;
-    int stim_mean = 0;
+    int stim_mean = 5;
     int stim_sdev = 100; // Note that max value is 2047 (and -2048)
     // int stim_clks = 500;//100007;
 
     int stim_val = 0;
     int cycling_num = 0;
     int cycling_offset = 0;
-    int pulse_height = 400;//0;
+    int pulse_height = 0;//400;//0;
 
     // NOTE THE BIG-ENDIAN ARRAYS HERE
     localparam int delay_array [0:(`BEAM_TOTAL)-1][0:NCHAN-1] = `BEAM_ANTENNA_DELAYS;
@@ -234,7 +234,7 @@ module L1_trigger_wrapper_tb;
 
     // Threshold, BQ initialization and AGC cycle
     initial begin : SETUP
-
+        $display("Version 6.10.0");
         #200;
         // Let everything get settled
         @(posedge wbclk);
@@ -358,75 +358,75 @@ module L1_trigger_wrapper_tb;
 
         #200;
 
-        $display("Prepping AGCs");
+        // $display("Prepping AGCs");
 
-        for(int idx=0; idx<8; idx=idx+1) begin: AGC_PREP_BY_CHAN
+        // for(int idx=0; idx<8; idx=idx+1) begin: AGC_PREP_BY_CHAN
             
-            $display($sformatf("Prepping AGC %1d", idx));
-            do_write_agc(22'h014 + idx * 22'h100, AGC_offset[idx]); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-            // I believe from other documentation
-            // that scale is a fraction of 4096 (13 bits, 0x1000).
-            do_write_agc(22'h010 + idx * 22'h100, AGC_scale[idx]); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+        //     $display($sformatf("Prepping AGC %1d", idx));
+        //     do_write_agc(22'h014 + idx * 22'h100, AGC_offset[idx]); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+        //     // I believe from other documentation
+        //     // that scale is a fraction of 4096 (13 bits, 0x1000).
+        //     do_write_agc(22'h010 + idx * 22'h100, AGC_scale[idx]); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
 
-            // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
-            // The first signal here tells the offset and scale to load into the first FF
-            // and the second signal applies them via the second FF.
-            do_write_agc(22'h000 + idx * 22'h100, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-            do_write_agc(22'h000 + idx * 22'h100, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+        //     // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
+        //     // The first signal here tells the offset and scale to load into the first FF
+        //     // and the second signal applies them via the second FF.
+        //     do_write_agc(22'h000 + idx * 22'h100, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+        //     do_write_agc(22'h000 + idx * 22'h100, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
 
-            #200;
-            do_write_agc(22'h000 + idx * 22'h100, 12'h004); // Reset AGC
-            do_write_agc(22'h000 + idx * 22'h100, 12'h001);//12'h001); // Start running AGC measurement cycle
+        //     #200;
+        //     do_write_agc(22'h000 + idx * 22'h100, 12'h004); // Reset AGC
+        //     do_write_agc(22'h000 + idx * 22'h100, 12'h001);//12'h001); // Start running AGC measurement cycle
             
-            $display($sformatf("FINISHED AGC %1d", idx));
-        end        
+        //     $display($sformatf("FINISHED AGC %1d", idx));
+        // end        
         // do_write_trigger(22'h0, 1); // Begin a trigger count cycle
-        forever begin
-            #0.01;
-            // if(TESTING_L1_CYCLE == "TRUE") begin
-            //     $display("Checking Trigger Cycle");    
-            //     do_read_trigger(22'h0, trigger_cycle_done); // Begin a trigger count cycle
-            //     if(trigger_cycle_done) begin
-            //         $display($sformatf("Trigger Cycle Done: %1d",trigger_cycle_done));
-            //         for(int beam_idx=0; beam_idx<NBEAMS; beam_idx=beam_idx+1) begin  
-            //             do_read_trigger(22'h200 + beam_idx, trigger_threshold_value);   
-            //             $display($sformatf("Trigger Threshold Value: %1d",trigger_threshold_value));    
-            //             do_read_trigger(22'h100 + beam_idx, trigger_count_value);   
-            //             $display($sformatf("Trigger Count Value: %1d",trigger_count_value));    
-            //         end
-            //         do_write_trigger(22'h0, 1); // Begin a trigger count cycle
-            //         trigger_cycle_done = 32'd0; // Probably unnecessary
-            //     end
-            // end
-            for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
+        // forever begin
+        //     #0.01;
+        //     // if(TESTING_L1_CYCLE == "TRUE") begin
+        //     //     $display("Checking Trigger Cycle");    
+        //     //     do_read_trigger(22'h0, trigger_cycle_done); // Begin a trigger count cycle
+        //     //     if(trigger_cycle_done) begin
+        //     //         $display($sformatf("Trigger Cycle Done: %1d",trigger_cycle_done));
+        //     //         for(int beam_idx=0; beam_idx<NBEAMS; beam_idx=beam_idx+1) begin  
+        //     //             do_read_trigger(22'h200 + beam_idx, trigger_threshold_value);   
+        //     //             $display($sformatf("Trigger Threshold Value: %1d",trigger_threshold_value));    
+        //     //             do_read_trigger(22'h100 + beam_idx, trigger_count_value);   
+        //     //             $display($sformatf("Trigger Count Value: %1d",trigger_count_value));    
+        //     //         end
+        //     //         do_write_trigger(22'h0, 1); // Begin a trigger count cycle
+        //     //         trigger_cycle_done = 32'd0; // Probably unnecessary
+        //     //     end
+        //     // end
+        //     // for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
 
-                // Check for complete AGC cycle
-                do_read_agc(22'h000 + idx * 22'h100, read_in_val); // see if AGC is done
+            //     // Check for complete AGC cycle
+            //     do_read_agc(22'h000 + idx * 22'h100, read_in_val); // see if AGC is done
                 
-                $display($sformatf("CYCLING AGC %1d: read: %1d", idx, read_in_val));
-                if(read_in_val) begin: agc_ready
-                    do_read_agc(22'h004 + idx * 22'h100, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 
-                    do_read_agc(22'h008 + idx * 22'h100, agc_gt); // the 3 address bits select the register to read. Lets get agc_scale at 
-                    do_read_agc(22'h00c + idx * 22'h100, agc_lt); // the 3 address bits select the register to read. Lets get agc_scale at 
-                    agc_sq = {{(17-TIMESCALE_REDUCTION_BITS){1'd0}},{agc_sq[24:17-TIMESCALE_REDUCTION_BITS]}};// agc_sq/131072, equvalent to a shift of 17
-                    agc_sqrt = $sqrt(agc_sq);
-                    agc_scale_err = agc_sqrt - TARGET_RMS;
-                    agc_scale_err_int = agc_scale_err*7000000;
-                    agc_offset_err = agc_gt-agc_lt;
-                    AGC_scale[idx] = $floor(AGC_scale[idx] + agc_scale_err * K_scale_P);
-                    AGC_offset[idx] = $floor(AGC_offset[idx]+ agc_offset_err * K_offset_P);
-                    do_write_agc(22'h010 + idx * 22'h100, AGC_scale[idx]);
-                    do_write_agc(22'h014 + idx * 22'h100, AGC_offset[idx]);
-                    do_write_agc(22'h000 + idx * 22'h100, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-                    do_write_agc(22'h000 + idx * 22'h100, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+            //     $display($sformatf("CYCLING AGC %1d: read: %1d", idx, read_in_val));
+            //     if(read_in_val) begin: agc_ready
+            //         do_read_agc(22'h004 + idx * 22'h100, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 
+            //         do_read_agc(22'h008 + idx * 22'h100, agc_gt); // the 3 address bits select the register to read. Lets get agc_scale at 
+            //         do_read_agc(22'h00c + idx * 22'h100, agc_lt); // the 3 address bits select the register to read. Lets get agc_scale at 
+            //         agc_sq = {{(17-TIMESCALE_REDUCTION_BITS){1'd0}},{agc_sq[24:17-TIMESCALE_REDUCTION_BITS]}};// agc_sq/131072, equivalent to a shift of 17
+            //         agc_sqrt = $sqrt(agc_sq);
+            //         agc_scale_err = agc_sqrt - TARGET_RMS;
+            //         agc_scale_err_int = agc_scale_err*7000000;
+            //         agc_offset_err = agc_gt-agc_lt;
+            //         AGC_scale[idx] = $floor(AGC_scale[idx] + agc_scale_err * K_scale_P);
+            //         AGC_offset[idx] = $floor(AGC_offset[idx]+ agc_offset_err * K_offset_P);
+            //         do_write_agc(22'h010 + idx * 22'h100, AGC_scale[idx]);
+            //         do_write_agc(22'h014 + idx * 22'h100, AGC_offset[idx]);
+            //         do_write_agc(22'h000 + idx * 22'h100, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
+            //         do_write_agc(22'h000 + idx * 22'h100, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
 
 
-                    do_write_agc(22'h000 + idx * 22'h100, 12'h004); // Reset AGC
-                    do_write_agc(22'h000 + idx * 22'h100, 12'h001); // Start running AGC measurement cycle
-                    read_in_val = 32'd0;
-                end
-            end 
-        end
+            //         do_write_agc(22'h000 + idx * 22'h100, 12'h004); // Reset AGC
+            //         do_write_agc(22'h000 + idx * 22'h100, 12'h001); // Start running AGC measurement cycle
+            //         read_in_val = 32'd0;
+            //     end
+            // end 
+        // end
     end
 
 
