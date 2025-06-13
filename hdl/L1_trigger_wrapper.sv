@@ -127,7 +127,7 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
                                             // This is the fraction of error value to change threshold by.
     
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the last measured counts (rates) here
-    reg [NBEAMS-1:0][31:0] trigger_count_reg = {NBEAMS{32{1'b0}}};
+    reg [NBEAMS-1:0][31:0] trigger_count_reg = {(NBEAMS*32){1'b0}};
 
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the to-be updated thresholds here
     reg [NBEAMS-1:0][17:0] threshold_recalculated_regs = {NBEAMS{`STARTTHRESH}};

@@ -48,7 +48,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     localparam HOLDOFF_BITS = $clog2(HOLDOFF_CLOCKS)+1;
     wire [NBEAMS-1:0] trigger_signal_bit_o;
     wire[NBEAMS-1:0][31:0] trigger_count_out;
-    reg [NBEAMS-1:0][HOLDOFF_BITS-1:0] holdoff_delay = {NBEAMS{(HOLDOFF_BITS){1'b0}}};
+    reg [NBEAMS-1:0][HOLDOFF_BITS-1:0] holdoff_delay = {(NBEAMS*HOLDOFF_BITS){1'b0}};
 
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [31:0] response_reg = 31'h0; // Pass back trigger count information
@@ -134,7 +134,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     ////////////////////////////////////////////////////////
 
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the thresholds here
-    reg [NBEAMS-1:0][17:0] threshold_regs = {NBEAMS{18{1'b0}}};
+    reg [NBEAMS-1:0][17:0] threshold_regs = {(NBEAMS*18){1'b0}};
 
     (* CUSTOM_CC_SRC = WBCLKTYPE *)
     reg [17:0] threshold_writing = {18{1'b0}};
@@ -217,18 +217,34 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
                 end
             end
 
-            // Stage a threshold in for a specific beam
-            always @(posedge wb_clk_i) begin
-                if((state == IDLE) && (wb_threshold_cyc_i && wb_threshold_stb_i && `ADDR_MATCH( wb_threshold_adr_i,  10'h200 + beam_idx, THRESHOLD_MASK ) && wb_threshold_we_i && wb_threshold_sel_i[1] && wb_threshold_dat_i[0]))
-                begin
-                    trigger_threshold_ce[beam_idx] <= 1'b1;
-                    threshold_writing <= threshold_regs[beam_idx];
-                end else begin
-                    trigger_threshold_ce[beam_idx] <= 1'b0;
-                end
-            end
+            // // Moving this outside to please synthesizer
+            // // Stage a threshold in for a specific beam
+            // always @(posedge wb_clk_i) begin
+            //     if((state == IDLE) && (wb_threshold_cyc_i && wb_threshold_stb_i && `ADDR_MATCH( wb_threshold_adr_i,  10'h200 + beam_idx, THRESHOLD_MASK ) && wb_threshold_we_i && wb_threshold_sel_i[1] && wb_threshold_dat_i[0]))
+            //     begin
+            //         trigger_threshold_ce[beam_idx] <= 1'b1;
+            //         threshold_writing <= threshold_regs[beam_idx];
+            //     end else begin
+            //         trigger_threshold_ce[beam_idx] <= 1'b0;
+            //     end
+            // end
         end
     endgenerate
+
+    reg[7:0] beam_idx_reg = wb_threshold_adr_i[7:0]; // Used to select which beam we are working on
+
+    // Moving this outside to please synthesizer
+    // Stage a threshold in for a specific beam
+    always @(posedge wb_clk_i) begin
+    //  ------->                                                                                        Here we are looking at just the top bits. beam_idx is vestigial but left as a reminder
+        if((state == IDLE) && (wb_threshold_cyc_i && wb_threshold_stb_i && `ADDR_MATCH( wb_threshold_adr_i,  10'h200 + beam_idx_reg, {10'hE00} ) && wb_threshold_we_i && wb_threshold_sel_i[1] && wb_threshold_dat_i[0]))
+        begin
+            trigger_threshold_ce[beam_idx_reg] <= 1'b1;
+            threshold_writing <= threshold_regs[beam_idx_reg];
+        end else begin
+            trigger_threshold_ce[beam_idx_reg] <= 1'b0;
+        end
+    end
 
     always @(posedge wb_clk_i) begin
         if (req_trigger_count) trigger_count_done <= 0;
