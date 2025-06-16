@@ -382,7 +382,8 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
 
 
     L1_trigger #(   .AGC_TIMESCALE_REDUCTION_BITS(AGC_TIMESCALE_REDUCTION_BITS), 
-                    .TRIGGER_CLOCKS(TRIGGER_CLOCKS))
+                    .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
+                    .NBEAMS(NBEAMS))
         u_L1_trigger(
             .wb_clk_i(wb_clk_i),
             .wb_rst_i(wb_rst_i),

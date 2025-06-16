@@ -56,7 +56,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     (* CUSTOM_CC_DST = WBCLKTYPE *)
     reg [NBEAMS-1:0][31:0] trigger_count_wb_reg; // Pass back # of triggers on WB
 
-    (* CUSTOM_CC_DST = CLKTYPE *)
+    (* CUSTOM_CC_SRC = CLKTYPE *) // If the timing fails, try again with this (changed to src)
     reg [NBEAMS-1:0][31:0] trigger_count_reg; // Pass back # of triggers on WB
 
 
@@ -136,7 +136,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the thresholds here
     reg [NBEAMS-1:0][17:0] threshold_regs = {(NBEAMS*18){1'b0}};
 
-    (* CUSTOM_CC_SRC = WBCLKTYPE *)
+    (* CUSTOM_CC_SRC = CLKTYPE *)
     reg [17:0] threshold_writing = {18{1'b0}};
 
     reg  [NBEAMS-1:0] trigger_threshold_ce = {NBEAMS{1'b0}};
@@ -216,18 +216,6 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
                     holdoff_delay[beam_idx] <= holdoff_delay[beam_idx] - 1; // Count down from last trigger count
                 end
             end
-
-            // // Moving this outside to please synthesizer
-            // // Stage a threshold in for a specific beam
-            // always @(posedge wb_clk_i) begin
-            //     if((state == IDLE) && (wb_threshold_cyc_i && wb_threshold_stb_i && `ADDR_MATCH( wb_threshold_adr_i,  10'h200 + beam_idx, THRESHOLD_MASK ) && wb_threshold_we_i && wb_threshold_sel_i[1] && wb_threshold_dat_i[0]))
-            //     begin
-            //         trigger_threshold_ce[beam_idx] <= 1'b1;
-            //         threshold_writing <= threshold_regs[beam_idx];
-            //     end else begin
-            //         trigger_threshold_ce[beam_idx] <= 1'b0;
-            //     end
-            // end
         end
     endgenerate
 
@@ -240,6 +228,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         if((state == IDLE) && (wb_threshold_cyc_i && wb_threshold_stb_i && `ADDR_MATCH( wb_threshold_adr_i,  10'h200 + beam_idx_reg, {10'hE00} ) && wb_threshold_we_i && wb_threshold_sel_i[1] && wb_threshold_dat_i[0]))
         begin
             trigger_threshold_ce[beam_idx_reg] <= 1'b1;
+            // TODO: THIS IS A CLOCK CROSSING!!!! //L
             threshold_writing <= threshold_regs[beam_idx_reg];
         end else begin
             trigger_threshold_ce[beam_idx_reg] <= 1'b0;
@@ -251,13 +240,14 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         else if (trigger_count_done_wbclk) trigger_count_done <= 1;
         
         if (trigger_count_done_wbclk) begin // flag that a counting cycle just completed
-            trigger_count_wb_reg <= trigger_count_out; // Contains all results
+            trigger_count_wb_reg <= trigger_count_reg; // Contains all results
         end            
 
         // Write command flags. These handle writes to address 0x00.
         req_trigger_count <= (state == IDLE) && (wb_threshold_cyc_i && wb_threshold_stb_i && `ADDR_MATCH( wb_threshold_adr_i, 10'h000, THRESHOLD_MASK ) && wb_threshold_we_i && wb_threshold_sel_i[0] && wb_threshold_dat_i[0]);
         trigger_threshold_update <= (state == IDLE) && (wb_threshold_cyc_i && wb_threshold_stb_i && `ADDR_MATCH( wb_threshold_adr_i, 10'h000, THRESHOLD_MASK ) && wb_threshold_we_i && wb_threshold_sel_i[1] && wb_threshold_dat_i[1]);
         // Give an extra clock to make sure threshold_writing sets up
+        // TODO: //L THIS IS A BAD (unclear) SOLUTION, REPLACE WITH FLAGGING
         trigger_threshold_ce_delayed <= trigger_threshold_ce;
         
         // Determine what we are doing this cycle
@@ -295,6 +285,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         end
     end
 
+    // TODO: Check about this clock crossing //L
     assign trigger_count_out = trigger_count_reg;
 
     wire  [7:0][39:0] data_stage_connection;

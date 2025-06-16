@@ -398,7 +398,13 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         endcase
     end
 
-    wire [95:0] data_stage_connection [1:0]; // In 12 bits since that's what the LPF works in
+    reg [95:0] data_stage_connection [3:0]; // In 12 bits since that's what the LPF works in
+
+    // Pipeline the connections
+    always @(posedge aclk) begin
+        data_stage_connection[1] <= data_stage_connection[0]; // LPF out to Biquad in
+        data_stage_connection[3] <= data_stage_connection[2]; // Biquad out to AGC in
+    end
 
     // Low pass filter
 
@@ -414,8 +420,8 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         `CONNECT_WBS_IFS( wb_ , wb_bq_ ),
         .reset_BQ_i(reset_i),
         .aclk(aclk),
-        .dat_i(data_stage_connection[0]),
-        .dat_o(data_stage_connection[1])
+        .dat_i(data_stage_connection[1]),
+        .dat_o(data_stage_connection[2])
     );
 
     agc_wrapper #(.TIMESCALE_REDUCTION((2**AGC_TIMESCALE_REDUCTION_BITS)))
@@ -425,7 +431,7 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         `CONNECT_WBS_IFM( wb_ , wb_agc_module_ ),
         .aclk(aclk),
         .aresetn(reset_i),
-        .dat_i(data_stage_connection[1]),
+        .dat_i(data_stage_connection[3]),
         .dat_o(dat_o)
     );
 
