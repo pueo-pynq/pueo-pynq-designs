@@ -289,7 +289,7 @@ module L1_trigger_wrapper_tb;
 
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h0C, coeff_from_file); // a_1'  // For incremental computation, unused
+                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h0C, coeff_from_file); // a_1'  // For incremental computation
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
                 do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h0C, coeff_from_file); // a_2'

@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
 
+`define USING_DEBUG 1
 // This module wraps the L1 trigger wrapper (double wrapper) and handles the AXI4S interface
 module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
     input wb_clk_i,
@@ -22,8 +23,10 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
     `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc7_ , 128 ),
 
     `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf0_ , 128 ),
-    // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf1_ , 128 ),
-    // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf2_ , 128 ),
+    `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf1_ , 128 ),
+    `ifdef USING_DEBUG
+    `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf2_ , 128 ),
+    `endif
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf3_ , 128 ),
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf4_ , 128 ),
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf5_ , 128 ),
@@ -62,6 +65,18 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         end
     endfunction    
 
+        // PACK is 96 -> 128
+    function [127:0] superpack;
+        input [39:0] data_in;
+        integer i;
+        begin
+            for (i=0;i<8;i=i+1) begin
+                superpack[(16*i+11) +: 5] = data_in[5*i +: 5];
+                superpack[(16*i) +: 11] = {11{1'b0}};
+            end
+        end
+    endfunction   
+
     wire [NBEAMS-1:0] trig_out;
 
     wire [7:0][95:0] repacked_data;
@@ -76,6 +91,10 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
 
     // REPACK unpacked ADC into dat_i
 
+    `ifdef USING_DEBUG
+    wire [7:0][39:0] dat_o;
+    `endif
+
     L1_trigger_wrapper #(
         .AGC_TIMESCALE_REDUCTION_BITS(AGC_TIMESCALE_REDUCTION_BITS),
         .NBEAMS(NBEAMS)
@@ -86,16 +105,24 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         .reset_i(reset_i), 
         .aclk(aclk),
         .dat_i(repacked_data),
+                    
+        `ifdef USING_DEBUG
+        .dat_o(dat_o),
+        `endif
         .trigger_o(trig_out)
     );
 
     `define ASSIGN( f, t) \
         assign f``tdata = pack(t);  \
-        assign f``tvalid = 1'b1
-        
+        assign f``tvalid = 1'b1;
+
+    `define SUPERASSIGN( f, t) \
+        assign f``tdata = superpack(t);  \
+        assign f``tvalid = 1'b1;
+
     `ASSIGN( buf0_ , {{(96-NBEAMS){1'b0}}, trig_out} );
-    // `ASSIGN( buf1_ , filt_out[1] );
-    // `ASSIGN( buf2_ , filt_out[2] );
+    `ASSIGN( buf1_ , repacked_data[0] );
+    `SUPERASSIGN( buf2_ , dat_o[0]);
     // `ASSIGN( buf3_ , filt_out[3] );           
     // `ASSIGN( buf0_ , filt_out[4] );
     // `ASSIGN( buf1_ , filt_out[5] );

@@ -132,10 +132,10 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
     // UPSTREAM RECEIVER ///////////////////////////////////////////////////
     // WB interface to the AGC control loop (in this module)
     // //  Top interface target (S)        Connection interface (M)
-    assign wb_ack_o = (state == ACK);
-    assign wb_err_o = 1'b0;
-    assign wb_rty_o = 1'b0;
-    assign wb_dat_o = response_reg;
+    assign wb_agc_controller_ack_o = (state == ACK);
+    assign wb_agc_controller_err_o = 1'b0;
+    assign wb_agc_controller_rty_o = 1'b0;
+    assign wb_agc_controller_dat_o = response_reg;
 
    
     (* CUSTOM_CC_DST = WBCLKTYPE *)

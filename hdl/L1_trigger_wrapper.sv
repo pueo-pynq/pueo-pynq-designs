@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
 
+`define USING_DEBUG 1
 `define DLYFF #0.1
 `define STARTTHRESH 18'd3500
 
@@ -20,6 +21,9 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
         input aclk,
         input [7:0][95:0] dat_i,
         
+        `ifdef USING_DEBUG
+        output [7:0][39:0] dat_o,
+        `endif
         output [NBEAMS-1:0] trigger_o
     );
 
@@ -392,6 +396,11 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
             .reset_i(reset_i), 
             .aclk(aclk),
             .dat_i(dat_i),
+            
+            `ifdef USING_DEBUG
+            .dat_o(dat_o),
+            `endif
+            
             .trigger_o(trigger_o));
 
 endmodule
