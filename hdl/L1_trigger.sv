@@ -133,23 +133,20 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     //////        Wishbone FSM stolen from AGC        //////
     ////////////////////////////////////////////////////////
 
-    (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the thresholds here
+    // (* CUSTOM_CC_SRC = WBCLKTYPE *) // Store the thresholds here
     reg [NBEAMS-1:0][17:0] threshold_regs = {(NBEAMS*18){1'b0}};
 
-    (* CUSTOM_CC_SRC = CLKTYPE *)
+    (* CUSTOM_CC_SRC = WBCLKTYPE *)
     reg [17:0] threshold_writing = {18{1'b0}};
+    // reg  [NBEAMS-1:0] trigger_threshold_written_aclk = 1'b0;
+    // reg  [NBEAMS-1:0] trigger_threshold_written_wbclk = 1'b0;
 
     reg  [NBEAMS-1:0] trigger_threshold_ce = {NBEAMS{1'b0}};
-    reg  [NBEAMS-1:0] trigger_threshold_ce_delayed = {NBEAMS{1'b0}};
     wire [NBEAMS-1:0] trigger_threshold_ce_aclk;
 
-    // genvar i;
-    // generate
-    //     for(i=0; i<NBEAMS; i++) begin
-    //         flag_sync u_CE_flag(.in_clkA(trigger_threshold_ce_delayed[i]),.clkA(wb_clk_i),
-    //                             .out_clkB(trigger_threshold_ce_aclk[i]),.clkB(aclk));
-    //     end
-    // endgenerate
+
+    // flag_sync u_CE_flag(.in_clkA(trigger_threshold_written_aclk),.clkA(aclk),
+    //                     .out_clkB(trigger_threshold_written_wbclk),.clkB(wb_clk_i));
 
     // Update all thresholds
     (* CUSTOM_CC_SRC = WBCLKTYPE *)
@@ -200,7 +197,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     generate
         for(beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin : CE_FLAGS_AND_THRESHOLD  
             // Flag to clock enable for a specific beam threshold load in
-            flag_sync u_CE_flag(.in_clkA(trigger_threshold_ce_delayed[beam_idx]),.clkA(wb_clk_i),
+            flag_sync u_CE_flag(.in_clkA(trigger_threshold_ce[beam_idx]),.clkA(wb_clk_i),
                                 .out_clkB(trigger_threshold_ce_aclk[beam_idx]),.clkB(aclk));     
 
             // Increment the counter if there is a trigger and not in holdoff
@@ -247,8 +244,8 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
         req_trigger_count <= (state == IDLE) && (wb_threshold_cyc_i && wb_threshold_stb_i && `ADDR_MATCH( wb_threshold_adr_i, 10'h000, THRESHOLD_MASK ) && wb_threshold_we_i && wb_threshold_sel_i[0] && wb_threshold_dat_i[0]);
         trigger_threshold_update <= (state == IDLE) && (wb_threshold_cyc_i && wb_threshold_stb_i && `ADDR_MATCH( wb_threshold_adr_i, 10'h000, THRESHOLD_MASK ) && wb_threshold_we_i && wb_threshold_sel_i[1] && wb_threshold_dat_i[1]);
         // Give an extra clock to make sure threshold_writing sets up
-        // TODO: //L THIS IS A BAD (unclear) SOLUTION, REPLACE WITH FLAGGING
-        trigger_threshold_ce_delayed <= trigger_threshold_ce;
+        // // TODO: //L THIS IS A BAD (unclear) SOLUTION, REPLACE WITH FLAGGING
+        // trigger_threshold_ce_delayed <= trigger_threshold_ce;
         
         // Determine what we are doing this cycle
         case (state)
@@ -303,7 +300,6 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
                     .dat_i(dat_i),
                     .dat_o(data_stage_connection));
 
-    //TODO: TEST THIS HOLDOFF LOGIC
     generate
         for(beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin 
             assign trigger_o[beam_idx] = trigger_signal_bit_o[beam_idx] && !(|holdoff_delay[beam_idx]);// holdoff_delay
