@@ -23,8 +23,8 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
     `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc7_ , 128 ),
 
     `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf0_ , 128 ),
-    `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf1_ , 128 ),
     `ifdef USING_DEBUG
+    `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf1_ , 128 ),
     `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf2_ , 128 ),
     `endif
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf3_ , 128 ),
@@ -65,14 +65,15 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         end
     endfunction    
 
-        // PACK is 96 -> 128
+    // SUPERPACK is 40 -> 128
+    // Note that these values are stored LSB
     function [127:0] superpack;
         input [39:0] data_in;
         integer i;
         begin
             for (i=0;i<8;i=i+1) begin
-                superpack[(16*i+11) +: 5] = data_in[5*i +: 5];
-                superpack[(16*i) +: 11] = {11{1'b0}};
+                superpack[(16*i+5) +: 11] = {11{1'b0}};
+                superpack[(16*i) +: 5] = data_in[5*i +: 5];
             end
         end
     endfunction   
@@ -93,6 +94,7 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
 
     `ifdef USING_DEBUG
     wire [7:0][39:0] dat_o;
+    wire [7:0][95:0] dat_debug;
     `endif
 
     L1_trigger_wrapper #(
@@ -108,6 +110,7 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
                     
         `ifdef USING_DEBUG
         .dat_o(dat_o),
+        .dat_debug(dat_debug),
         `endif
         .trigger_o(trig_out)
     );
@@ -120,9 +123,12 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         assign f``tdata = superpack(t);  \
         assign f``tvalid = 1'b1;
 
-    `ASSIGN( buf0_ , {{(96-NBEAMS){1'b0}}, trig_out} );
-    `ASSIGN( buf1_ , repacked_data[0] );
+    // `ASSIGN( buf0_ , {{(96-NBEAMS){1'b0}}, trig_out} );
+    `ASSIGN( buf0_ , repacked_data[0] );
+    `ifdef USING_DEBUG
+    `ASSIGN( buf1_ , dat_debug[0]);
     `SUPERASSIGN( buf2_ , dat_o[0]);
+    `endif
     // `ASSIGN( buf3_ , filt_out[3] );           
     // `ASSIGN( buf0_ , filt_out[4] );
     // `ASSIGN( buf1_ , filt_out[5] );

@@ -9,8 +9,8 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
                     parameter WBCLKTYPE = "PSCLK", parameter CLKTYPE = "ACLK",
                     parameter TRIGGER_CLOCKS=375000000,// at 375 MHz this will count for 1 s  
                     parameter HOLDOFF_CLOCKS=16,
-                    parameter STARTING_TARGET=100,
-                    parameter STARTING_KP=1,
+                    parameter STARTING_TARGET=101,
+                    parameter STARTING_KP=2,
                     parameter COUNT_MARGIN=10)( 
 
         input wb_clk_i,
@@ -23,6 +23,7 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
         
         `ifdef USING_DEBUG
         output [7:0][39:0] dat_o,
+        output [7:0][95:0] dat_debug,
         `endif
         output [NBEAMS-1:0] trigger_o
     );
@@ -399,6 +400,7 @@ module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTIO
             
             `ifdef USING_DEBUG
             .dat_o(dat_o),
+            .dat_debug(dat_debug),
             `endif
             
             .trigger_o(trigger_o));

@@ -33,6 +33,9 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         input aclk,
         input [95:0] dat_i,
         
+        `ifdef USING_DEBUG
+        output [95:0] dat_debug,
+        `endif
         output [39:0] dat_o
     );
 
@@ -423,6 +426,8 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         .dat_i(data_stage_connection[1]),
         .dat_o(data_stage_connection[2])
     );
+
+    assign dat_debug = data_stage_connection[2];
 
     agc_wrapper #(.TIMESCALE_REDUCTION((2**AGC_TIMESCALE_REDUCTION_BITS)))
      u_agc_wrapper(

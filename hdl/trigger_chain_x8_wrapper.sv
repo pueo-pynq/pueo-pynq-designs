@@ -20,7 +20,9 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
         input reset_i, 
         input aclk,
         input [7:0][95:0] dat_i ,
-        
+        `ifdef USING_DEBUG
+        output [7:0][95:0] dat_debug,
+        `endif
         output [7:0][39:0] dat_o 
     );
 
@@ -137,6 +139,9 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
                 .reset_i(reset_i), 
                 .aclk(aclk),
                 .dat_i(dat_i[idx]),
+                `ifdef USING_DEBUG
+                    .dat_debug(dat_debug[idx]),
+                `endif
                 .dat_o(dat_o[idx]));
             end;
     endgenerate

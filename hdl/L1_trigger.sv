@@ -33,6 +33,7 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
 
         `ifdef USING_DEBUG
         output [7:0][39:0] dat_o,
+        output [7:0][95:0] dat_debug,
         `endif
 
         output [NBEAMS-1:0] trigger_o
@@ -291,9 +292,11 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
     assign trigger_count_out = trigger_count_reg;
 
     wire  [7:0][39:0] data_stage_connection;
+    wire  [7:0][39:0] data_stage_debug;
     
     `ifdef USING_DEBUG
     assign dat_o = data_stage_connection;
+    assign dat_debug = data_stage_debug;
     `endif
 
     trigger_chain_x8_wrapper #(.AGC_TIMESCALE_REDUCTION_BITS(AGC_TIMESCALE_REDUCTION_BITS))
@@ -307,6 +310,9 @@ module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS =
                     .reset_i(reset_i), 
                     .aclk(aclk),
                     .dat_i(dat_i),
+                    `ifdef USING_DEBUG
+                    .dat_debug(dat_debug),
+                    `endif
                     .dat_o(data_stage_connection));
 
     generate
