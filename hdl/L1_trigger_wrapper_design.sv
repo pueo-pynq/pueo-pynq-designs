@@ -124,12 +124,13 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         assign f``tdata = superpack(t);  \
         assign f``tvalid = 1'b1;
 
-    // `ASSIGN( buf0_ , {{(96-NBEAMS){1'b0}}, trig_out} );
-    `ASSIGN( buf0_ , repacked_data[0] );
+    `ASSIGN( buf0_ , {{(96-NBEAMS){1'b0}}, trig_out} );
+    // `ASSIGN( buf0_ , repacked_data[0] );
     `ifdef USING_DEBUG
-    `ASSIGN( buf1_ , dat_debug[0][0]);
-    `ASSIGN( buf2_ , dat_debug[0][1]);
-    `SUPERASSIGN( buf3_ , dat_o[0]);
+    // `ASSIGN( buf1_ , dat_debug[0][0]);
+    `ASSIGN( buf1_ , repacked_data[0]); // Raw
+    `ASSIGN( buf2_ , dat_debug[0][1]); // Biquad
+    `SUPERASSIGN( buf3_ , dat_o[0]); // AGC
     `endif
     // `ASSIGN( buf3_ , filt_out[3] );           
     // `ASSIGN( buf0_ , filt_out[4] );
