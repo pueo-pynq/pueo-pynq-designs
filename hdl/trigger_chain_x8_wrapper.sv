@@ -21,7 +21,7 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
         input aclk,
         input [7:0][95:0] dat_i ,
         `ifdef USING_DEBUG
-        output [7:0][95:0] dat_debug,
+        output [7:0][1:0][95:0] dat_debug,
         `endif
         output [7:0][39:0] dat_o 
     );
@@ -51,10 +51,10 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
     endfunction    
 
 
-    localparam [21:0] CHAN_MASK = 22'h700; //0111 0000 0000
+    localparam [21:0] CHAN_MASK = 22'h1c00; //0001 1100 0000 0000
 
     // Connect the WB outputs
-    wire [2:0] wb_bq_idx = wb_bq_adr_i[10:8];
+    wire [2:0] wb_bq_idx = wb_bq_adr_i[12:10];
 
     wire        wb_bq_ack_o_vec [7:0];
     wire        wb_bq_err_o_vec [7:0];
@@ -67,7 +67,7 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
     assign wb_bq_dat_o = wb_bq_dat_o_vec[wb_bq_idx];
     
     
-    wire [2:0] wb_agc_idx = wb_agc_adr_i[10:8];
+    wire [2:0] wb_agc_idx = wb_agc_adr_i[12:10];
     
     wire        wb_agc_ack_o_vec [7:0];
     wire        wb_agc_err_o_vec [7:0];
@@ -114,7 +114,7 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
             assign wb_agc_dat_o_vec[idx] = wb_agc_connect_dat_i;
 
             // The cyc signal controls whether anything happens
-            assign wb_bq_connect_cyc_o = wb_bq_cyc_i && `ADDR_MATCH(wb_bq_adr_i, (idx * 11'h100), CHAN_MASK);
+            assign wb_bq_connect_cyc_o = wb_bq_cyc_i && `ADDR_MATCH(wb_bq_adr_i, (idx * 12'h400), CHAN_MASK);
             assign wb_bq_connect_stb_o = wb_bq_stb_i;
             assign wb_bq_connect_adr_o = wb_bq_adr_i[7:0];
             assign wb_bq_connect_dat_o = wb_bq_dat_i;
@@ -123,7 +123,7 @@ module trigger_chain_x8_wrapper #(parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
 
 
             // The cyc signal controls whether anything happens
-            assign wb_agc_connect_cyc_o = wb_agc_cyc_i && `ADDR_MATCH(wb_agc_adr_i, (idx * 11'h100), CHAN_MASK);
+            assign wb_agc_connect_cyc_o = wb_agc_cyc_i && `ADDR_MATCH(wb_agc_adr_i, (idx * 12'h400), CHAN_MASK);
             assign wb_agc_connect_stb_o = wb_agc_stb_i;
             assign wb_agc_connect_adr_o = wb_agc_adr_i[7:0];
             assign wb_agc_connect_dat_o = wb_agc_dat_i;

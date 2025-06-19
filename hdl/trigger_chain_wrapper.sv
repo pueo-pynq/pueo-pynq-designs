@@ -34,7 +34,7 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         input [95:0] dat_i,
         
         `ifdef USING_DEBUG
-        output [95:0] dat_debug,
+        output [1:0][95:0] dat_debug,
         `endif
         output [39:0] dat_o
     );
@@ -197,25 +197,19 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         if (state == READ) begin
             // If bit [4] is 1, return from control loop info
             // Else, bit [4] is 0, return from AGC module info
-            if(wb_agc_controller_adr_i[4]) begin 
-                case (wb_agc_controller_adr_i[3:0])
+            if(wb_agc_controller_adr_i[6]) begin 
+                case (wb_agc_controller_adr_i[5:2])
                     0: response_reg <= {{(32-17){1'b0}}, agc_control_scale_delta};
                     1: response_reg <= {{(32-16){agc_control_offset_delta[15]}}, agc_control_offset_delta};
                 endcase
                 // response_reg <= agc_info_reg[wb_agc_controller_adr_i[3:0]];
             end else begin
-                response_reg <= agc_module_info_reg[wb_agc_controller_adr_i[3:0]];
+                response_reg <= agc_module_info_reg[wb_agc_controller_adr_i[5:2]];
             end
         end
         // If writing to a threshold, put it in the appropriate register
         if (state == WRITE) begin
-            // NO CURRENT NEED FOR WRITING, CAN IMPLEMENT LATER
-
-            // if (wb_adr_i[8]) begin // The 8th bit is used to indicate a threshold write
-            //     if (wb_sel_i[0]) threshold_regs[wb_adr_i[7:0]][7:0] <= wb_dat_i[7:0];
-            //     if (wb_sel_i[1]) threshold_regs[wb_adr_i[7:0]][15:8] <= wb_dat_i[15:8];
-            //     if (wb_sel_i[2]) threshold_regs[wb_adr_i[7:0]][17:16] <= wb_dat_i[17:16];
-            // end             
+            // NO CURRENT NEED FOR WRITING, CAN IMPLEMENT LATER           
         end
     end
 
@@ -300,7 +294,7 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
             AGC_MODULE_READING: begin // Read the agc status information 3
                 if(agc_module_info_idx < 6) begin
                     if(comm_FSM_state == COMM_SENDING) begin
-                        do_read_req_agc({17'h0, agc_module_info_idx, 2'b00}); // Request a read of the trigger count
+                        do_read_req_agc({17'h0, agc_module_info_idx, 2'b00}); // Request a read of agc info
                         comm_FSM_state <= COMM_WAITING;
                     end else if(comm_FSM_state == COMM_WAITING) begin
                         if(wb_agc_module_ack_i) begin // Command received, move on
@@ -427,7 +421,8 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         .dat_o(data_stage_connection[2])
     );
 
-    assign dat_debug = data_stage_connection[2];
+    assign dat_debug[0] = data_stage_connection[0];
+    assign dat_debug[1] = data_stage_connection[2];
 
     agc_wrapper #(.TIMESCALE_REDUCTION((2**AGC_TIMESCALE_REDUCTION_BITS)))
      u_agc_wrapper(

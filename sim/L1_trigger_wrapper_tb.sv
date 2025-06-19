@@ -109,7 +109,7 @@ module L1_trigger_wrapper_tb;
         input [21:0] in_addr;
         input [31:0] in_data;
         begin
-            do_write_L1(in_addr + 22'h4000 + 22'h1000, in_data);// Assert addr[14] and addr[12]
+            do_write_L1(in_addr + 22'h4000 + 22'h2000, in_data);// Assert addr[14] and addr[13]
         end
     endtask
 
@@ -240,19 +240,6 @@ module L1_trigger_wrapper_tb;
         @(posedge wbclk);
         @(posedge wbclk);
 
-        // @(posedge wbclk);
-        // #1.75;
-        // $display("Initial Threshold Load");
-        // for(int beam_idx=0; beam_idx<NBEAMS; beam_idx++) begin
-        //     // Note: 475 is 19000/40. Magic number hardcoded nonsense.
-        //     do_write_trigger(22'h100 + beam_idx, 18'd19000 - beam_idx*(19000-2500)); // Load the trigger threshold
-        //     do_write_trigger(22'h200 + beam_idx, 1); // Execute CE
-        //     $display($sformatf("Prepping Beam %1d", beam_idx));
-        // end
-        // do_write_trigger(22'h0, 2); // Update all the thresholds
-
-        // $display("Initial Threshold Has Been Loaded");
-
         for(int idx=0; idx<8; idx=idx+1) begin: BQ_PREP_BY_CHAN
 
             for (int bqidx=0; bqidx<2; bqidx = bqidx+1) begin: BQ_LOOP
@@ -269,89 +256,89 @@ module L1_trigger_wrapper_tb;
 
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h04, coeff_from_file); // B
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h04, coeff_from_file); // B
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h04, coeff_from_file); // A
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h04, coeff_from_file); // A
 
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h08, coeff_from_file); // C_2
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_2
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h08, coeff_from_file); // C_3  // Yes, this is the correct order according to the documentation
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_3  // Yes, this is the correct order according to the documentation
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h08, coeff_from_file); // C_1
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_1
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h08, coeff_from_file); // C_0
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_0
 
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h0C, coeff_from_file); // a_1'  // For incremental computation
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h0C, coeff_from_file); // a_1'  // For incremental computation
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h0C, coeff_from_file); // a_2'
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h0C, coeff_from_file); // a_2'
 
                 // f FIR
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h10, coeff_from_file); // D_FF  
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file); // D_FF  
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h10, coeff_from_file); // X_6    
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file); // X_6    
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h10, coeff_from_file); // X_5   
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file); // X_5   
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h10, coeff_from_file);  // X_4   
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_4   
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h10, coeff_from_file);  // X_3   
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_3   
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h10, coeff_from_file);  // X_2   
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_2   
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h10, coeff_from_file);  // X_1 
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_1 
             
                 // g FIR
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h14, coeff_from_file);  // E_GG  
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // E_GG  
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h14, coeff_from_file); // X_7 
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file); // X_7 
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h14, coeff_from_file);  // X_6
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_6
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h14, coeff_from_file);  // X_5    
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_5    
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h14, coeff_from_file);  // X_4  
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_4  
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h14, coeff_from_file);  // X_3  
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_3  
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h14, coeff_from_file);  // X_2  
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_2  
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h14, coeff_from_file);  // X_1 
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_1 
                 
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h18, coeff_from_file);  // D_FG
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h18, coeff_from_file);  // D_FG
 
                 code = $fgets(str, fc);
                 dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h1C, coeff_from_file);  // E_GF
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h1C, coeff_from_file);  // E_GF
 
-                do_write_bq( bqidx*8'h80 + idx * 22'h100 + 8'h00, 32'd1 );     // Update
+                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h00, 32'd1 );     // Update
             end 
         end
 
@@ -360,12 +347,12 @@ module L1_trigger_wrapper_tb;
         forever begin
             #0.01;
             for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
-                do_read_agc(5'b10000 + idx * 22'h100, read_in_val);
-                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h100, read_in_val));
-                do_read_agc(5'b10000 + 1 + idx * 22'h100, read_in_val);
-                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h100 + 1, read_in_val));
-                do_read_agc(5'b00100 + idx * 22'h100, read_in_val);
-                $display($sformatf("AGC 0x%1h: %1d",5'b10100 + idx * 22'h100, read_in_val));
+                do_read_agc(5'b10000 + idx * 22'h400, read_in_val);
+                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400, read_in_val));
+                do_read_agc(5'b10000 + 1 + idx * 22'h400, read_in_val);
+                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400 + 1, read_in_val));
+                do_read_agc(5'b00100 + idx * 22'h400, read_in_val);
+                $display($sformatf("AGC 0x%1h: %1d",5'b10100 + idx * 22'h400, read_in_val));
                 do_read_L1(0, read_in_val);
                 $display($sformatf("trigger 0x%1h: %1d",0, read_in_val));
                 do_read_L1(1, read_in_val);
@@ -382,77 +369,6 @@ module L1_trigger_wrapper_tb;
             
             end
         end
-
-
-        // $display("Prepping AGCs");
-
-        // for(int idx=0; idx<8; idx=idx+1) begin: AGC_PREP_BY_CHAN
-            
-        //     $display($sformatf("Prepping AGC %1d", idx));
-        //     do_write_agc(22'h014 + idx * 22'h100, AGC_offset[idx]); // Set offset (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-        //     // I believe from other documentation
-        //     // that scale is a fraction of 4096 (13 bits, 0x1000).
-        //     do_write_agc(22'h010 + idx * 22'h100, AGC_scale[idx]); // Set scaling (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-
-        //     // My understanding is that these flag to the CE on the registers of the DSP where the new values are loaded in. 
-        //     // The first signal here tells the offset and scale to load into the first FF
-        //     // and the second signal applies them via the second FF.
-        //     do_write_agc(22'h000 + idx * 22'h100, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-        //     do_write_agc(22'h000 + idx * 22'h100, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-
-        //     #200;
-        //     do_write_agc(22'h000 + idx * 22'h100, 12'h004); // Reset AGC
-        //     do_write_agc(22'h000 + idx * 22'h100, 12'h001);//12'h001); // Start running AGC measurement cycle
-            
-        //     $display($sformatf("FINISHED AGC %1d", idx));
-        // end        
-        // do_write_trigger(22'h0, 1); // Begin a trigger count cycle
-        // forever begin
-        //     #0.01;
-        //     // if(TESTING_L1_CYCLE == "TRUE") begin
-        //     //     $display("Checking Trigger Cycle");    
-        //     //     do_read_trigger(22'h0, trigger_cycle_done); // Begin a trigger count cycle
-        //     //     if(trigger_cycle_done) begin
-        //     //         $display($sformatf("Trigger Cycle Done: %1d",trigger_cycle_done));
-        //     //         for(int beam_idx=0; beam_idx<NBEAMS; beam_idx=beam_idx+1) begin  
-        //     //             do_read_trigger(22'h200 + beam_idx, trigger_threshold_value);   
-        //     //             $display($sformatf("Trigger Threshold Value: %1d",trigger_threshold_value));    
-        //     //             do_read_trigger(22'h100 + beam_idx, trigger_count_value);   
-        //     //             $display($sformatf("Trigger Count Value: %1d",trigger_count_value));    
-        //     //         end
-        //     //         do_write_trigger(22'h0, 1); // Begin a trigger count cycle
-        //     //         trigger_cycle_done = 32'd0; // Probably unnecessary
-        //     //     end
-        //     // end
-        //     // for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
-
-        //         // Check for complete AGC cycle
-        //         do_read_agc(22'h000 + idx * 22'h100, read_in_val); // see if AGC is done
-                
-        //         $display($sformatf("CYCLING AGC %1d: read: %1d", idx, read_in_val));
-        //         if(read_in_val) begin: agc_ready
-        //             do_read_agc(22'h004 + idx * 22'h100, agc_sq); // the 3 address bits select the register to read. Lets get agc_scale at 
-        //             do_read_agc(22'h008 + idx * 22'h100, agc_gt); // the 3 address bits select the register to read. Lets get agc_scale at 
-        //             do_read_agc(22'h00c + idx * 22'h100, agc_lt); // the 3 address bits select the register to read. Lets get agc_scale at 
-        //             agc_sq = {{(17-TIMESCALE_REDUCTION_BITS){1'd0}},{agc_sq[24:17-TIMESCALE_REDUCTION_BITS]}};// agc_sq/131072, equivalent to a shift of 17
-        //             agc_sqrt = $sqrt(agc_sq);
-        //             agc_scale_err = agc_sqrt - TARGET_RMS;
-        //             agc_scale_err_int = agc_scale_err*7000000;
-        //             agc_offset_err = agc_gt-agc_lt;
-        //             AGC_scale[idx] = $floor(AGC_scale[idx] + agc_scale_err * K_scale_P);
-        //             AGC_offset[idx] = $floor(AGC_offset[idx]+ agc_offset_err * K_offset_P);
-        //             do_write_agc(22'h010 + idx * 22'h100, AGC_scale[idx]);
-        //             do_write_agc(22'h014 + idx * 22'h100, AGC_offset[idx]);
-        //             do_write_agc(22'h000 + idx * 22'h100, 12'h300); // AGC Load (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-        //             do_write_agc(22'h000 + idx * 22'h100, 12'h400); // AGC Apply (from https://github.com/pueo-pynq/rfsoc-pydaq/blob/New/AGC/AGC_Daq.py)
-
-
-        //             do_write_agc(22'h000 + idx * 22'h100, 12'h004); // Reset AGC
-        //             do_write_agc(22'h000 + idx * 22'h100, 12'h001); // Start running AGC measurement cycle
-        //             read_in_val = 32'd0;
-        //         end
-        //     end 
-        // end
     end
 
 
