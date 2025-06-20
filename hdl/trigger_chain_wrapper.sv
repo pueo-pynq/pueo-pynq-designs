@@ -320,9 +320,17 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
 
                 // SCALE
                 if(agc_sq_adjusted > (TARGET_RMS_SQUARED + RMS_SQUARE_SCALE_ERR)) begin
-                    agc_recalculated_scale_reg = agc_module_info_reg[4] - agc_control_scale_delta;
+                    if(agc_module_info_reg[4] > 17'h0012C) begin // Cutoff
+                        agc_recalculated_scale_reg = agc_module_info_reg[4] - agc_control_scale_delta;
+                    end else begin
+                        agc_recalculated_scale_reg = agc_module_info_reg[4];
+                    end
                 end else if(agc_sq_adjusted < (TARGET_RMS_SQUARED - RMS_SQUARE_SCALE_ERR)) begin
-                    agc_recalculated_scale_reg = agc_module_info_reg[4] + agc_control_scale_delta;
+                    if(agc_module_info_reg[4] < 17'h1FBD0) begin // Cutoff
+                        agc_recalculated_scale_reg = agc_module_info_reg[4] + agc_control_scale_delta;
+                    end else begin
+                        agc_recalculated_scale_reg = agc_module_info_reg[4];
+                    end
                 end
 
                 // OFFSET GT-LT

@@ -7,7 +7,7 @@
 
 module L1_trigger_wrapper #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2,
                     parameter WBCLKTYPE = "PSCLK", parameter CLKTYPE = "ACLK",
-                    parameter TRIGGER_CLOCKS=375000000*1,// at 375 MHz this will count for 1s*100  
+                    parameter [47:0] TRIGGER_CLOCKS=375000000/2,// at 375 MHz this will count for 1s*0.5  
                     parameter HOLDOFF_CLOCKS=16,        // NOTE: Parameters are 32 bit max, which this exceeds
                     parameter STARTING_TARGET=100, // At 100 s period, this will be 1 Hz
                     parameter STARTING_KP=2,

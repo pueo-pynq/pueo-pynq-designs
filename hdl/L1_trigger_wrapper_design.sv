@@ -79,6 +79,20 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         end
     endfunction   
 
+    // MIDPACK is 40 -> 128
+    // Note that these values are stored not entirely MSB
+    function [127:0] midpack;
+        input [39:0] data_in;
+        integer i;
+        begin
+            for (i=0;i<8;i=i+1) begin
+                midpack[(16*i+9) +: 7] = {11{1'b0}};
+                midpack[(16*i+4) +: 5] = data_in[5*i +: 5];
+                midpack[(16*i) +: 4] = {4{1'b0}};
+            end
+        end
+    endfunction   
+
     wire [NBEAMS-1:0] trig_out;
 
     wire [7:0][95:0] repacked_data;
@@ -124,13 +138,18 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         assign f``tdata = superpack(t);  \
         assign f``tvalid = 1'b1;
 
-    `ASSIGN( buf0_ , {{(96-NBEAMS){1'b0}}, trig_out} );
-    // `ASSIGN( buf0_ , repacked_data[0] );
+    `define MIDASSIGN( f, t) \
+        assign f``tdata = midpack(t);  \
+        assign f``tvalid = 1'b1;
+
+    // `ASSIGN( buf0_ , {{(96-15){1'b0}}, {trig_out[3:0]},{11'b0}} );
+    `ASSIGN( buf0_ , repacked_data[0] );
     `ifdef USING_DEBUG
     // `ASSIGN( buf1_ , dat_debug[0][0]);
-    `ASSIGN( buf1_ , repacked_data[0]); // Raw
-    `ASSIGN( buf2_ , dat_debug[0][1]); // Biquad
-    `SUPERASSIGN( buf3_ , dat_o[0]); // AGC
+    `ASSIGN( buf1_ , repacked_data[1]); // Raw
+    `ASSIGN( buf2_ , repacked_data[2]);//dat_debug[0][1]); // Biquad
+    `ASSIGN( buf3_ , repacked_data[4]);//dat_debug[0][1]); // Biquad
+    // `SUPERASSIGN( buf3_ , dat_o[0]); // AGC
     `endif
     // `ASSIGN( buf3_ , filt_out[3] );           
     // `ASSIGN( buf0_ , filt_out[4] );
@@ -138,7 +157,8 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
     // `ASSIGN( buf2_ , filt_out[6] );
     // `ASSIGN( buf3_ , filt_out[7] ); 
 
-    `ASSIGN( dac0_ , {{(96-NBEAMS){1'b0}}, trig_out} );
+    // `ASSIGN( dac0_ , {{(96-15){1'b0}}, {trig_out[3:0]},{11'b0}} );
+    `MIDASSIGN( dac0_ , dat_o[0]);
     // `ASSIGN( dac1_ , filt_out[1] );
     // `ASSIGN( dac0_ , filt_out[2] );
     // `ASSIGN( dac1_ , filt_out[3] );

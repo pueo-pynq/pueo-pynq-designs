@@ -6,7 +6,7 @@ module L1_trigger_wrapper_tb;
     parameter       THIS_DESIGN = "BASIC";
     parameter       THIS_STIM   = "GAUSS_RAND";//_PULSES";//"SINE";//"GAUSS_RAND";
     parameter       TESTING_L1_CYCLE = "TRUE";
-    parameter       TRIGGER_CLOCKS = 3750; // 10 Microseconds
+    parameter [47:0] TRIGGER_CLOCKS = 3750; // 10 Microseconds
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
     parameter TARGET_RMS = 4;
     parameter NCHAN = 8;

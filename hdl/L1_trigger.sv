@@ -10,7 +10,7 @@
 // 3) AGC and 12->5 bit conversion
 module L1_trigger #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2,
                     parameter WBCLKTYPE = "PSCLK", parameter CLKTYPE = "ACLK",
-                    parameter TRIGGER_CLOCKS=375000000,
+                    parameter [47:0] TRIGGER_CLOCKS=375000000,
                     parameter HOLDOFF_CLOCKS=16)( // at 375 MHz this will count for 1 s  
 
         input wb_clk_i,
