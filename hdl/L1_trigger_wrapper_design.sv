@@ -105,6 +105,18 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
     assign repacked_data[6] = unpack(adc6_tdata);
     assign repacked_data[7] = unpack(adc7_tdata);
 
+    wire [7:0][127:0] sim_data_wires;
+    wire [7:0][95:0] repacked_sim_data;
+    
+    assign repacked_sim_data[0] = unpack(sim_data_wires[0]);
+    assign repacked_sim_data[1] = unpack(sim_data_wires[1]);
+    assign repacked_sim_data[2] = unpack(sim_data_wires[2]);
+    assign repacked_sim_data[3] = unpack(sim_data_wires[3]);
+    assign repacked_sim_data[4] = unpack(sim_data_wires[4]);
+    assign repacked_sim_data[5] = unpack(sim_data_wires[5]);
+    assign repacked_sim_data[6] = unpack(sim_data_wires[6]);
+    assign repacked_sim_data[7] = unpack(sim_data_wires[7]);
+
     // REPACK unpacked ADC into dat_i
 
     `ifdef USING_DEBUG
@@ -121,7 +133,7 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         `CONNECT_WBS_IFS( wb_ , wb_), // Pass right through (s to s)
         .reset_i(reset_i), 
         .aclk(aclk),
-        .dat_i(repacked_data),
+        .dat_i(repacked_sim_data),
                     
         `ifdef USING_DEBUG
         .dat_o(dat_o),
@@ -130,12 +142,15 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         .trigger_o(trig_out)
     );
 
-    wire [127:0] sim_data_wires;
 
-    Gaussian12b_LFSR data_sim ( .clk(aclk),
-                                .sim_data(sim_data_wires)
-    );
-    
+    genvar i;
+    generate
+        for(i=0; i<8; i++) begin
+            Gaussian12b_LFSR #(.SEED_BASE(i*32)) data_sim ( .clk(aclk),
+                                                            .sim_data(sim_data_wires[i])
+            );
+        end
+    endgenerate
 
     `define PLAINASSIGN( f, t) \
         assign f``tdata = t;  \
@@ -158,8 +173,8 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
     `ifdef USING_DEBUG
     // `ASSIGN( buf1_ , dat_debug[0][0]);
     `ASSIGN( buf1_ , repacked_data[1]); // Raw
-    `ASSIGN( buf2_ , repacked_data[2]);//dat_debug[0][1]); // Biquad
-    `PLAINASSIGN( buf3_ , sim_data_wires);//dat_debug[0][1]); // Biquad
+    `ASSIGN( buf2_ , sim_data_wires[0]);//dat_debug[0][1]); // Biquad
+    `PLAINASSIGN( buf3_ , sim_data_wires[1]);//dat_debug[0][1]); // Biquad
     // `SUPERASSIGN( buf3_ , dat_o[0]); // AGC
     `endif
     // `ASSIGN( buf3_ , filt_out[3] );           
@@ -170,7 +185,7 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
 
     // `ASSIGN( dac0_ , {{(96-15){1'b0}}, {trig_out[3:0]},{11'b0}} );
     `MIDASSIGN( dac0_ , dat_o[0]);
-    `PLAINASSIGN( dac1_ , sim_data_wires );
+    `PLAINASSIGN( dac1_ , sim_data_wires[0] );
     // `ASSIGN( dac0_ , filt_out[2] );
     // `ASSIGN( dac1_ , filt_out[3] );
     // `ASSIGN( dac0_ , filt_out[4] );
