@@ -34,8 +34,8 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf6_ , 128 ),
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf7_ , 128 ),
 
-    `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac0_ , 128 )
-    // `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac1_ , 128 ),
+    `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac0_ , 128 ),
+    `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac1_ , 128 )
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac2_ , 128 ),
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac3_ , 128 ),
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac4_ , 128 ),
@@ -130,6 +130,17 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
         .trigger_o(trig_out)
     );
 
+    wire [127:0] sim_data_wires;
+
+    Gaussian12b_LFSR data_sim ( .clk(aclk),
+                                .sim_data(sim_data_wires)
+    );
+    
+
+    `define PLAINASSIGN( f, t) \
+        assign f``tdata = t;  \
+        assign f``tvalid = 1'b1;
+
     `define ASSIGN( f, t) \
         assign f``tdata = pack(t);  \
         assign f``tvalid = 1'b1;
@@ -148,7 +159,7 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
     // `ASSIGN( buf1_ , dat_debug[0][0]);
     `ASSIGN( buf1_ , repacked_data[1]); // Raw
     `ASSIGN( buf2_ , repacked_data[2]);//dat_debug[0][1]); // Biquad
-    `ASSIGN( buf3_ , repacked_data[4]);//dat_debug[0][1]); // Biquad
+    `PLAINASSIGN( buf3_ , sim_data_wires);//dat_debug[0][1]); // Biquad
     // `SUPERASSIGN( buf3_ , dat_o[0]); // AGC
     `endif
     // `ASSIGN( buf3_ , filt_out[3] );           
@@ -159,7 +170,7 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
 
     // `ASSIGN( dac0_ , {{(96-15){1'b0}}, {trig_out[3:0]},{11'b0}} );
     `MIDASSIGN( dac0_ , dat_o[0]);
-    // `ASSIGN( dac1_ , filt_out[1] );
+    `PLAINASSIGN( dac1_ , sim_data_wires );
     // `ASSIGN( dac0_ , filt_out[2] );
     // `ASSIGN( dac1_ , filt_out[3] );
     // `ASSIGN( dac0_ , filt_out[4] );
