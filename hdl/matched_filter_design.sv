@@ -90,7 +90,7 @@ module matched_filter_design(
     // it doesn't really matter since we ignore treadys anyway.
     assign dac0_tdata = matchdat0_tdata;
     assign dac0_tvalid = matchdat0_tvalid;
-    assign dac1_tdata = matchdat1_tdata;
-    assign dac1_tvalid = matchdat1_tvalid;
+    assign dac1_tdata = adc0_tdata;
+    assign dac1_tvalid = adc0_tvalid;
 
 endmodule
