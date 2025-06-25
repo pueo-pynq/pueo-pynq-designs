@@ -22,11 +22,9 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
     `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc7_ , 128 ),
 
     `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf0_ , 128 ),
-    `ifdef USING_DEBUG
     `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf1_ , 128 ),
     `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf2_ , 128 ),
     `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf3_ , 128 ),
-    `endif
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf3_ , 128 ),
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf4_ , 128 ),
     // `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf5_ , 128 ),
@@ -184,7 +182,10 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
     // `ASSIGN( buf3_ , filt_out[7] ); 
 
     // `ASSIGN( dac0_ , {{(96-15){1'b0}}, {trig_out[3:0]},{11'b0}} );
-    `MIDASSIGN( dac0_ , dat_o[0]);
+    
+    `ifdef USING_DEBUG
+        `MIDASSIGN( dac0_ , dat_o[0]);
+    `endif
     `PLAINASSIGN( dac1_ , sim_data_wires[0] );
     // `ASSIGN( dac0_ , filt_out[2] );
     // `ASSIGN( dac1_ , filt_out[3] );
