@@ -1,7 +1,6 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
 
-`define USING_DEBUG 1
 // This module wraps the L1 trigger wrapper (double wrapper) and handles the AXI4S interface
 module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
     input wb_clk_i,

@@ -1,6 +1,5 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
-`define USING_DEBUG 1
 module filter_chain_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
     input wb_clk_i,
     input wb_rst_i,
