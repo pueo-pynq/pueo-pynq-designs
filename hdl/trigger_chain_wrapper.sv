@@ -403,19 +403,29 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         endcase
     end
 
-    reg [95:0] data_stage_connection [3:0]; // In 12 bits since that's what the LPF works in
+    reg [95:0] data_stage_connection [5:0]; // In 12 bits since that's what the LPF works in
 
     // Pipeline the connections
     always @(posedge aclk) begin
-        data_stage_connection[1] <= data_stage_connection[0]; // LPF out to Biquad in
-        data_stage_connection[3] <= data_stage_connection[2]; // Biquad out to AGC in
+        data_stage_connection[1] <= data_stage_connection[0]; // LPF to Matched Filter
+        data_stage_connection[3] <= data_stage_connection[2]; // Matched Filter to Biquad
+        data_stage_connection[5] <= data_stage_connection[4]; // Biquad out to AGC in
     end
+
 
     // Low pass filter
 
     shannon_whitaker_lpfull_v2 u_lpf (  .clk_i(aclk),
                                         .in_i(dat_i),
                                         .out_o(data_stage_connection[0]));
+    
+    // Matched Filter
+
+    matched_filter u_matched_filter(
+        .aclk(aclk),
+        .data_i(data_stage_connection[1]),
+        .data_o(data_stage_connection[2])
+    );
 
     // Biquads
 
@@ -425,8 +435,8 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         `CONNECT_WBS_IFS( wb_ , wb_bq_ ),
         .reset_BQ_i(reset_i),
         .aclk(aclk),
-        .dat_i(data_stage_connection[1]),
-        .dat_o(data_stage_connection[2])
+        .dat_i(data_stage_connection[3]),
+        .dat_o(data_stage_connection[4])
     );
 
     assign dat_debug[0] = data_stage_connection[0];
@@ -439,7 +449,7 @@ module trigger_chain_wrapper #( parameter AGC_TIMESCALE_REDUCTION_BITS = 4,
         `CONNECT_WBS_IFM( wb_ , wb_agc_module_ ),
         .aclk(aclk),
         .aresetn(reset_i),
-        .dat_i(data_stage_connection[3]),
+        .dat_i(data_stage_connection[5]),
         .dat_o(dat_o)
     );
 
