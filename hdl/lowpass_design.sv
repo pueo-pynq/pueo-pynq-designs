@@ -20,8 +20,8 @@ module lowpass_design(
         `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf2_ , 128 ),
         `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf3_ , 128 ),
 
-	`HOST_NAMED_PORTS_AXI4S_MIN_IF( dac0_ , 128 ),
-        `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac1_ , 128 )
+	      `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac0_ , 128 )
+        // `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac1_ , 128 )
     );
 
     // UNPACK is 128 -> 96
@@ -82,6 +82,6 @@ module lowpass_design(
    `ASSIGN( buf3_ , filt_out[3] );   
 
    `ASSIGN( dac0_ , filt_out[0] );
-   `ASSIGN( dac1_ , filt_out[0] );
+  //  `ASSIGN( dac1_ , filt_out[0] );
            
 endmodule

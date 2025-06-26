@@ -7,7 +7,7 @@
     endgenerate
 `endif
 
-module filter_chain_wishboneless_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
+module filter_chain_no_biquad_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
     input wb_clk_i,
     input wb_rst_i,
     `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ),
@@ -112,8 +112,8 @@ module filter_chain_wishboneless_design #(parameter NBEAMS=2, parameter AGC_TIME
     );
 
         
-    `ASSIGN( buf0_ , repacked_data[0] );
-    `ASSIGN( buf1_ , dat_o[0]);
+    `ASSIGN( buf0_ , dat_o[0]);
+    `ASSIGN( buf1_ , repacked_data[0] );
     // `ASSIGN( buf2_ , filt_out[2] );
     // `ASSIGN( buf3_ , filt_out[3] );           
     // `ASSIGN( buf0_ , filt_out[4] );
@@ -121,8 +121,8 @@ module filter_chain_wishboneless_design #(parameter NBEAMS=2, parameter AGC_TIME
     // `ASSIGN( buf2_ , filt_out[6] );
     // `ASSIGN( buf3_ , filt_out[7] ); 
 
-    `ASSIGN( dac0_ , repacked_data[0] );
-    `ASSIGN( dac1_ , dat_o[0] );
+    `ASSIGN( dac0_ , dat_o[0] );
+    // `ASSIGN( dac1_ , dat_o[0] );
     // `ASSIGN( dac0_ , filt_out[2] );
     // `ASSIGN( dac1_ , filt_out[3] );
     // `ASSIGN( dac0_ , filt_out[4] );
