@@ -96,7 +96,8 @@ module filter_chain_wishboneless_design #(parameter NBEAMS=2, parameter AGC_TIME
 
     L1_trigger_wrapper #(
         .AGC_TIMESCALE_REDUCTION_BITS(2),
-        .NBEAMS(NBEAMS)
+        .NBEAMS(NBEAMS),
+        .USE_BIQUADS("FALSE")
     ) u_L1_trigger_wrapper (
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),
