@@ -4,7 +4,7 @@
 module L1_trigger_wrapper_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "GAUSS_RAND";//_PULSES";//"SINE";//"GAUSS_RAND";
+    parameter       THIS_STIM   = "ONLY_PULSES";//"GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
     parameter       TESTING_L1_CYCLE = "TRUE";
     parameter [47:0] TRIGGER_CLOCKS = 3750; // 10 Microseconds
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
@@ -190,8 +190,8 @@ module L1_trigger_wrapper_tb;
 
             L1_trigger_wrapper #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
                                     .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
-                                    .STARTING_TARGET(50), // Target triggers per period
-                                    .COUNT_MARGIN(5), // +- Margin on triggers per period
+                                    .STARTING_TARGET(100), // Target triggers per period
+                                    .COUNT_MARGIN(98), // +- Margin on triggers per period
                                     .STARTING_KP(100)) // Threshold change amount per correction
                 u_L1_trigger(
                     .wb_clk_i(wbclk),
@@ -438,6 +438,36 @@ module L1_trigger_wrapper_tb;
                                 // if(j==0) begin
                                 //     $display($sformatf("Number: %1d, rotating: %1d", (cycling_num-cycling_offset), (cycling_num-cycling_offset)%4));
                                 // end
+                                if((cycling_num-cycling_offset)%4 > 1) begin
+                                    stim_val = stim_val + pulse_height/((cycling_num-cycling_offset)/3 + 1);
+                                end else begin
+                                    stim_val = stim_val - pulse_height/((cycling_num-cycling_offset)/3 + 1);
+                                end
+                                if(stim_val > 2047) begin
+                                    stim_val = 2047;
+                                end else if (stim_val < -2048) begin
+                                    stim_val = -2048;
+                                end
+                            end
+                            stim_vals[j][k] = stim_val;
+                            // in_data_reg[j][k*12 +: 12] = stim_val;
+                        end
+                        samples[j] = stim_vals[j];// Not sure it has to be iterated like this
+                    end
+                end
+            end   
+        end else if (THIS_STIM == "ONLY_PULSES") begin
+            $display("THIS_DESIGN set to PULSES");  
+            forever begin
+                for(int i=0; i<TRIGGER_CLOCKS/2; i++) begin: FILL_DELAYED_PULSES
+                    #0.01;
+                    @(posedge aclk);
+                    for(int j=0; j<NCHAN; j=j+1) begin : CHANNEL_FILL_DELAYED_PULSES
+                        for(int k=0; k<NSAMP; k=k+1) begin : SAMPLE_FILL_DELAYED_PULSES
+                            stim_val = 0;
+                            cycling_num = i*8+k + delay_array[ALIGNED_BEAM][j];
+                            cycling_offset = 8*50;
+                            if((cycling_num-cycling_offset) < 12 && (cycling_num-cycling_offset) > 0) begin : ADD_PULSE
                                 if((cycling_num-cycling_offset)%4 > 1) begin
                                     stim_val = stim_val + pulse_height/((cycling_num-cycling_offset)/3 + 1);
                                 end else begin
