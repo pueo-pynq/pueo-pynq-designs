@@ -44,7 +44,7 @@ module L1_trigger_wrapper_tb;
     int stim_val = 0;
     int cycling_num = 0;
     int cycling_offset = 0;
-    int pulse_height = 0;//400;//0;
+    int pulse_height = 400;//0;
 
     // NOTE THE BIG-ENDIAN ARRAYS HERE
     localparam int delay_array [0:(`BEAM_TOTAL)-1][0:NCHAN-1] = `BEAM_ANTENNA_DELAYS;
