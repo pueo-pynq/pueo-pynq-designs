@@ -123,7 +123,8 @@ module L1_trigger_wrapper_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_R
 
     L1_trigger_wrapper #(
         .AGC_TIMESCALE_REDUCTION_BITS(AGC_TIMESCALE_REDUCTION_BITS),
-        .NBEAMS(NBEAMS)
+        .NBEAMS(NBEAMS),
+        .USE_BIQUADS("TRUE")
     ) u_L1_trigger_wrapper (
         .wb_clk_i(wb_clk_i),
         .wb_rst_i(wb_rst_i),
