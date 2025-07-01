@@ -4,9 +4,10 @@
 module L1_trigger_wrapper_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "ONLY_PULSES";//"GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
+    parameter       THIS_STIM   = "GAUSS_RESET";
+                                                //"ONLY_PULSES"//"GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
     parameter       TESTING_L1_CYCLE = "TRUE";
-    parameter [47:0] TRIGGER_CLOCKS = 3750; // 10 Microseconds
+    parameter [47:0] TRIGGER_CLOCKS = 375;//3750; // 10 Microseconds
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
     parameter TARGET_RMS = 4;
     parameter NCHAN = 8;
@@ -191,8 +192,8 @@ module L1_trigger_wrapper_tb;
             L1_trigger_wrapper #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
                                     .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
                                     .STARTING_TARGET(100), // Target triggers per period
-                                    .COUNT_MARGIN(98), // +- Margin on triggers per period
-                                    .STARTING_KP(100)) // Threshold change amount per correction
+                                    .COUNT_MARGIN(5), // +- Margin on triggers per period
+                                    .STARTING_DELTA(100)) // Threshold change amount per correction
                 u_L1_trigger(
                     .wb_clk_i(wbclk),
                     .wb_rst_i(1'b0),
@@ -230,7 +231,7 @@ module L1_trigger_wrapper_tb;
     int agc_lt = 0;
     int agc_offset_err = 0;
     int f_outs [8] = {0,0,0,0,0,0,0,0};
-
+    int reset_delay = 0;
 
     // Threshold, BQ initialization and AGC cycle
     initial begin : SETUP
@@ -486,6 +487,39 @@ module L1_trigger_wrapper_tb;
                     end
                 end
             end   
+        end else if (THIS_STIM == "GAUSS_RESET") begin : GAUSS_RESET_RUN
+
+            $display("Beginning Random Gaussian Stimulus with delayed reset");
+            reset_delay = TRIGGER_CLOCKS * 3;
+            forever begin: FILL_STIM_GAUSS_LOOP 
+                #0.01;
+
+                @(posedge aclk);
+                for(int idx=0;idx<8;idx=idx+1) begin: FILL_STIM_GAUSS_CHAN_LOOP
+                    for(int i=0; i<8; i++) begin: FILL_STIM_GAUSS
+                        do begin
+                            stim_val = $dist_normal(seed, stim_mean, stim_sdev);
+                        end while(stim_val>2047 || stim_val < -2048);
+                        stim_vals[idx][i] = stim_val;
+                        // $fwrite(f_outs[idx],$sformatf("%1d\n",outsample[idx][i]));
+                    end
+                    samples[idx] = stim_vals[idx];
+                end
+                
+            end
+        end
+    end
+
+    initial begin
+        if (THIS_STIM == "GAUSS_RESET") begin 
+            forever begin:RESET_LOOP
+                @(posedge aclk);
+                reset_delay = reset_delay-1;
+                if(reset_delay == 0) begin
+                    do_write_L1(22'h1000, 0); 
+                    reset_delay = TRIGGER_CLOCKS*3;
+                end
+            end
         end
     end
     
