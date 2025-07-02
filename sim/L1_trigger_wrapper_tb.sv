@@ -4,7 +4,7 @@
 module L1_trigger_wrapper_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "GAUSS_HARDRESET";
+    parameter       THIS_STIM   = "GAUSS_THRESH_WRITE";
                                                 //"GAUSS_STARTSTOP"//"GAUSS_RESET"//"ONLY_PULSES"//"GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
     parameter       TESTING_L1_CYCLE = "TRUE";
     parameter [47:0] TRIGGER_CLOCKS = 375;//3750; // 10 Microseconds
@@ -491,7 +491,7 @@ module L1_trigger_wrapper_tb;
                     end
                 end
             end   
-        end else if (THIS_STIM == "GAUSS_HARDRESET" ||THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" ) begin : GAUSS_RESET_RUN
+        end else if (THIS_STIM == "GAUSS_HARDRESET" ||THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" || THIS_STIM == "GAUSS_THRESH_WRITE" ) begin : GAUSS_RESET_RUN
 
             $display("Beginning Random Gaussian Stimulus");
             reset_delay = TRIGGER_CLOCKS * 3;
@@ -561,6 +561,33 @@ module L1_trigger_wrapper_tb;
                 if(start_delay == 0) begin
                     do_write_L1(22'h1000, 1); 
                      start_delay = TRIGGER_CLOCKS*3;
+                end
+
+            end
+        end
+    end
+
+    int stop_delay = TRIGGER_CLOCKS*3;
+    int start_delay = TRIGGER_CLOCKS*1;
+    int write_delay = TRIGGER_CLOCKS*5;
+    initial begin
+        if (THIS_STIM == "GAUSS_THRESH_WRITE") begin 
+            forever begin: THRESH_WRITE_LOOP
+                @(posedge aclk);
+                if(start_delay>0) start_delay = start_delay-1;
+                if(stop_delay>0) stop_delay = stop_delay-1;
+                if(write_delay>0) write_delay = write_delay-1;
+                if(stop_delay == 0) begin
+                    do_write_L1(22'h1000, 2); 
+                    stop_delay = TRIGGER_CLOCKS*6;
+                end     
+                if(start_delay == 0) begin
+                    do_write_L1(22'h1000, 1); 
+                    start_delay = TRIGGER_CLOCKS*6;
+                end
+                if(write_delay == 0) begin
+                    do_write_L1(22'h0804, 500); 
+                    write_delay = TRIGGER_CLOCKS*6;
                 end
 
             end
