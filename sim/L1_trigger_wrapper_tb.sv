@@ -4,8 +4,8 @@
 module L1_trigger_wrapper_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "GAUSS_RESET";
-                                                //"ONLY_PULSES"//"GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
+    parameter       THIS_STIM   = "GAUSS_STARTSTOP";
+                                                //"GAUSS_RESET"//"ONLY_PULSES"//"GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
     parameter       TESTING_L1_CYCLE = "TRUE";
     parameter [47:0] TRIGGER_CLOCKS = 375;//3750; // 10 Microseconds
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
@@ -231,7 +231,6 @@ module L1_trigger_wrapper_tb;
     int agc_lt = 0;
     int agc_offset_err = 0;
     int f_outs [8] = {0,0,0,0,0,0,0,0};
-    int reset_delay = 0;
 
     // Threshold, BQ initialization and AGC cycle
     initial begin : SETUP
@@ -345,31 +344,31 @@ module L1_trigger_wrapper_tb;
 
 
         #200;
-        forever begin
-            #0.01;
-            for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
-                do_read_agc(5'b10000 + idx * 22'h400, read_in_val);
-                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400, read_in_val));
-                do_read_agc(5'b10000 + 1 + idx * 22'h400, read_in_val);
-                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400 + 1, read_in_val));
-                do_read_agc(5'b00100 + idx * 22'h400, read_in_val);
-                $display($sformatf("AGC 0x%1h: %1d",5'b10100 + idx * 22'h400, read_in_val));
-                do_read_L1(0, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",0, read_in_val));
-                do_read_L1(1, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",1, read_in_val));
-                do_read_L1(2, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",2, read_in_val));
-                do_read_L1(3, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",3, read_in_val));
-                do_read_L1(4, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",4, read_in_val));
-                do_read_L1(5, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",5, read_in_val));
+        // forever begin
+        //     #0.01;
+        //     for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
+        //         do_read_agc(5'b10000 + idx * 22'h400, read_in_val);
+        //         $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400, read_in_val));
+        //         do_read_agc(5'b10000 + 1 + idx * 22'h400, read_in_val);
+        //         $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400 + 1, read_in_val));
+        //         do_read_agc(5'b00100 + idx * 22'h400, read_in_val);
+        //         $display($sformatf("AGC 0x%1h: %1d",5'b10100 + idx * 22'h400, read_in_val));
+        //         do_read_L1(0, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",0, read_in_val));
+        //         do_read_L1(1, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",1, read_in_val));
+        //         do_read_L1(2, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",2, read_in_val));
+        //         do_read_L1(3, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",3, read_in_val));
+        //         do_read_L1(4, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",4, read_in_val));
+        //         do_read_L1(5, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",5, read_in_val));
 
             
-            end
-        end
+        //     end
+        // end
     end
 
 
@@ -487,9 +486,9 @@ module L1_trigger_wrapper_tb;
                     end
                 end
             end   
-        end else if (THIS_STIM == "GAUSS_RESET") begin : GAUSS_RESET_RUN
+        end else if (THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" ) begin : GAUSS_RESET_RUN
 
-            $display("Beginning Random Gaussian Stimulus with delayed reset");
+            $display("Beginning Random Gaussian Stimulus");
             reset_delay = TRIGGER_CLOCKS * 3;
             forever begin: FILL_STIM_GAUSS_LOOP 
                 #0.01;
@@ -510,6 +509,8 @@ module L1_trigger_wrapper_tb;
         end
     end
 
+
+    int reset_delay = 0;
     initial begin
         if (THIS_STIM == "GAUSS_RESET") begin 
             forever begin:RESET_LOOP
@@ -519,6 +520,27 @@ module L1_trigger_wrapper_tb;
                     do_write_L1(22'h1000, 0); 
                     reset_delay = TRIGGER_CLOCKS*3;
                 end
+            end
+        end
+    end
+
+    int stop_delay = TRIGGER_CLOCKS*3;
+    int start_delay = TRIGGER_CLOCKS*1;
+    initial begin
+        if (THIS_STIM == "GAUSS_STARTSTOP") begin 
+            forever begin: STARTSTOP_LOOP
+                @(posedge aclk);
+                if(start_delay>0) start_delay = start_delay-1;
+                if(stop_delay>0) stop_delay = stop_delay-1;
+                if(stop_delay == 0) begin
+                    do_write_L1(22'h1000, 2); 
+                     stop_delay = TRIGGER_CLOCKS*6;
+                end     
+                if(start_delay == 0) begin
+                    do_write_L1(22'h1000, 1); 
+                     start_delay = TRIGGER_CLOCKS*3;
+                end
+
             end
         end
     end
