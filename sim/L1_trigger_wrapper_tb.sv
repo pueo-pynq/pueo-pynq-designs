@@ -4,52 +4,43 @@
 module L1_trigger_wrapper_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "GAUSS_THRESH_WRITE";
-                                                //"GAUSS_STARTSTOP"//"GAUSS_RESET"//"ONLY_PULSES"//"GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
-    parameter       TESTING_L1_CYCLE = "TRUE";
-    parameter [47:0] TRIGGER_CLOCKS = 375;//3750; // 10 Microseconds
+    parameter       THIS_STIM   = "GAUSS_RESET"; // Other options are:
+                                                        //"GAUSS_STARTSTOP"
+                                                        //"GAUSS_RESET"
+                                                        //"ONLY_PULSES"
+                                                        //"GAUSS_RAND_PULSES"
+                                                        //"SINE"
+                                                        //"GAUSS_RAND"
+                                                        //"GAUSS_THRESH_WRITE"
+
+    // Clocks per L1 trigger sampling cycle
+    parameter [47:0] TRIGGER_CLOCKS = 375; 
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
-    parameter TARGET_RMS = 4;
     parameter NCHAN = 8;
     parameter NSAMP = 8;
     parameter NBITS = 12;
     parameter NBEAMS = 2;
     parameter ALIGNED_BEAM = 0;
 
-    // PID control values. Note that this controller implementation cumulatively adds the output here
-    // to the values. Other implementations therefore call this value "I". In a sense this is "P" for
-    // the first derivative.
-    parameter K_scale_P = -50.0;
-    parameter K_offset_P = -1.0/8;
-
     // Notch location
     localparam int notch [2] = {250, 400};
     localparam int Q [2] = {8,8};       
     localparam int GAUSS_NOISE_SIZE = 200;
 
-    // AGC Parameters
-    int AGC_offset [8] = {0,0,0,0,0,0,0,0};
-
-    localparam int INITIAL_SCALE = 1800;//2127;//found experimentally for sdvev = 100;
-    int AGC_scale [8] = {INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE};//1024;
-    // For a scale value of 32, 32/4096 = 1/128. With a pulse of 512 that becomes 4
-    // This resulted in a value of 17 (16+1, so 1). I believe this is due to two fractional bits being removed? Maybe 3, with rounding.
-    // Specifically, NFRAC_OUT in agc_dsp.sv
-
     // Gaussian Random Parameters
     int seed = 1;
     int stim_mean = 5;
     int stim_sdev = 100; // Note that max value is 2047 (and -2048)
-    // int stim_clks = 500;//100007;
 
+    // For use in generating test pulses
     int stim_val = 0;
     int cycling_num = 0;
     int cycling_offset = 0;
-    int pulse_height = 400;//0;
+    int pulse_height = 400;
 
+    // Definied delays, for use in *generating* pulses in this test stand
     // NOTE THE BIG-ENDIAN ARRAYS HERE
     localparam int delay_array [0:(`BEAM_TOTAL)-1][0:NCHAN-1] = `BEAM_ANTENNA_DELAYS;
-
 
     // Sine scale
     int sine_scale = 1;
@@ -228,13 +219,6 @@ module L1_trigger_wrapper_tb;
     int stim_val;
     reg [11:0] stim_vals [7:0] [7:0];
     reg [31:0] read_in_val = 32'd0;
-    reg [24:0] agc_sq = 25'd0;
-    real agc_sqrt = 0;
-    real agc_scale_err = 0;
-    int agc_scale_err_int = 0;
-    int agc_gt = 0;
-    int agc_lt = 0;
-    int agc_offset_err = 0;
     int f_outs [8] = {0,0,0,0,0,0,0,0};
 
     // Threshold, BQ initialization and AGC cycle
