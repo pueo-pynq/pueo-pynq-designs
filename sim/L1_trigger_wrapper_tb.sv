@@ -4,8 +4,8 @@
 module L1_trigger_wrapper_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "GAUSS_STARTSTOP";
-                                                //"GAUSS_RESET"//"ONLY_PULSES"//"GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
+    parameter       THIS_STIM   = "GAUSS_HARDRESET";
+                                                //"GAUSS_STARTSTOP"//"GAUSS_RESET"//"ONLY_PULSES"//"GAUSS_RAND_PULSES";//"SINE";//"GAUSS_RAND";
     parameter       TESTING_L1_CYCLE = "TRUE";
     parameter [47:0] TRIGGER_CLOCKS = 375;//3750; // 10 Microseconds
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
@@ -185,6 +185,11 @@ module L1_trigger_wrapper_tb;
    reg reset_reg = 1'b0;
    wire reset;
    assign reset = reset_reg;
+
+    // Reset
+   reg wbreset_reg = 1'b0;
+   wire wbreset;
+   assign wbreset = wbreset_reg;
     
     generate
         if (THIS_DESIGN == "BASIC") begin : BASIC
@@ -196,7 +201,7 @@ module L1_trigger_wrapper_tb;
                                     .STARTING_DELTA(100)) // Threshold change amount per correction
                 u_L1_trigger(
                     .wb_clk_i(wbclk),
-                    .wb_rst_i(1'b0),
+                    .wb_rst_i(wbreset),
                     `CONNECT_WBS_IFM( wb_ , wb_L1_ ),
                     .reset_i(reset), 
                     .aclk(aclk),
@@ -486,7 +491,7 @@ module L1_trigger_wrapper_tb;
                     end
                 end
             end   
-        end else if (THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" ) begin : GAUSS_RESET_RUN
+        end else if (THIS_STIM == "GAUSS_HARDRESET" ||THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" ) begin : GAUSS_RESET_RUN
 
             $display("Beginning Random Gaussian Stimulus");
             reset_delay = TRIGGER_CLOCKS * 3;
@@ -519,6 +524,23 @@ module L1_trigger_wrapper_tb;
                 if(reset_delay == 0) begin
                     do_write_L1(22'h1000, 0); 
                     reset_delay = TRIGGER_CLOCKS*3;
+                end
+            end
+        end
+    end
+
+    initial begin
+        if (THIS_STIM == "GAUSS_HARDRESET") begin 
+            forever begin:HARDRESET_LOOP
+                @(posedge aclk);
+                reset_delay = reset_delay-1;
+                if(reset_delay == 0) begin
+                    wbreset_reg = 0;
+                    @(posedge wbclk)
+                    wbreset_reg = 1;
+                    @(posedge wbclk)
+                    wbreset_reg = 0;
+                    reset_delay = TRIGGER_CLOCKS*10;
                 end
             end
         end
