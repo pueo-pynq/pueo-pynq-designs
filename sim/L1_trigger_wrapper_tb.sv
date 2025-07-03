@@ -4,7 +4,7 @@
 module L1_trigger_wrapper_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "GAUSS_THRESH_WRITE"; // Other options are:
+    parameter       THIS_STIM   = "ALL_SOFT_RESET"; // Other options are:
                                                         //"GAUSS_STARTSTOP"
                                                         //"GAUSS_RESET"
                                                         //"ONLY_PULSES"
@@ -12,6 +12,7 @@ module L1_trigger_wrapper_tb;
                                                         //"SINE"
                                                         //"GAUSS_RAND"
                                                         //"GAUSS_THRESH_WRITE"
+                                                        //"ALL_SOFT_RESET"
 
     // Clocks per L1 trigger sampling cycle
     parameter [47:0] TRIGGER_CLOCKS = 375; 
@@ -450,7 +451,7 @@ module L1_trigger_wrapper_tb;
                     end
                 end
             end   
-        end else if (THIS_STIM == "GAUSS_HARDRESET" ||THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" || THIS_STIM == "GAUSS_THRESH_WRITE" ) begin : GAUSS_RESET_RUN
+        end else begin//if (THIS_STIM == "GAUSS_HARDRESET" ||THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" || THIS_STIM == "GAUSS_THRESH_WRITE" ) begin : GAUSS_RESET_RUN
 
             $display("Beginning Random Gaussian Stimulus");
             forever begin: FILL_STIM_GAUSS_LOOP 
@@ -473,7 +474,8 @@ module L1_trigger_wrapper_tb;
     end
 
 
-    int reset_delay = TRIGGER_CLOCKS * 3;
+    int reset_delay = TRIGGER_CLOCKS*3;
+    int agc_reset_delay = TRIGGER_CLOCKS*5;
     initial begin
         if (THIS_STIM == "GAUSS_RESET") begin 
             forever begin:RESET_LOOP
@@ -482,6 +484,25 @@ module L1_trigger_wrapper_tb;
                 if(reset_delay == 0) begin
                     do_write_L1(22'h1000, 0); 
                     reset_delay = TRIGGER_CLOCKS*3;
+                end
+            end
+        end
+    end
+
+    initial begin
+        if (THIS_STIM == "ALL_SOFT_RESET") begin 
+            forever begin:SOFT_RESET_LOOP
+                @(posedge aclk);
+                reset_delay = reset_delay-1;
+                if(reset_delay == 0) begin
+                    do_write_L1(22'h1001, 1); 
+                    reset_delay = TRIGGER_CLOCKS*6;
+                end
+
+                agc_reset_delay = agc_reset_delay-1;
+                if(agc_reset_delay == 0) begin
+                    do_write_L1(22'h1001, 2); 
+                    agc_reset_delay = TRIGGER_CLOCKS*6;
                 end
             end
         end
