@@ -4,7 +4,7 @@
 module L1_trigger_wrapper_tb;
     
     parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "GAUSS_RESET"; // Other options are:
+    parameter       THIS_STIM   = "GAUSS_THRESH_WRITE"; // Other options are:
                                                         //"GAUSS_STARTSTOP"
                                                         //"GAUSS_RESET"
                                                         //"ONLY_PULSES"
@@ -64,11 +64,11 @@ module L1_trigger_wrapper_tb;
     assign wb_L1_adr_o = address_L1;
     assign ack_L1 = wb_L1_ack_i;
 
-    reg use_L1 = 0; // QOL tie these together if not ever implementing writing
-    reg wr_L1 = 0; // QOL tie these together if not ever implementing writing
+    reg use_L1 = 0; 
+    reg wr_L1 = 0; 
     assign wb_L1_cyc_o = use_L1;
     assign wb_L1_stb_o = use_L1;
-    assign wb_L1_we_o = wr_L1; // Tie this in too if only ever writing
+    assign wb_L1_we_o = wr_L1;
     assign wb_L1_sel_o = {4{use_L1}};
 
     task do_write_L1; 
@@ -147,30 +147,10 @@ module L1_trigger_wrapper_tb;
     endgenerate
 
 
-    // Trigger and threshold control
-    reg [17:0]          thresh_reg          = 18'd0;
-    reg [NBEAMS-1:0]    thresh_ce_reg       = {NBEAMS{1'b0}};
-    reg                 update_reg          = 1'b0;
+    // Trigger  output
     reg [NBEAMS-1:0]    trigger_reg; 
-
-    wire [17:0]         thresh              = thresh_reg;
-    wire [NBEAMS-1:0]   thresh_ce           = thresh_ce_reg;
-    wire                update              = update_reg;
     wire [NBEAMS-1:0]   trigger;
-
     assign trigger_reg = trigger;
-
-
-    // wire [5:0] outsample [7:0] [7:0]; // 8 channels and 8 samples.
-    // wire [5*8-1:0] outsample_arr [7:0]; // 1 channel, samples appended
-
-    // generate
-    //     for (genvar idx=0;idx<8;idx=idx+1) begin: DEVEC_CHAN
-    //         for (genvar k=0;k<8;k=k+1) begin : DEVEC
-    //             assign outsample[idx][k] = outsample_arr[idx][5*k +: 5];
-    //         end
-    //     end
-    // endgenerate
 
     // Reset
    reg reset_reg = 1'b0;
@@ -205,11 +185,6 @@ module L1_trigger_wrapper_tb;
 
         end
     endgenerate
-
-
-    reg [31:0] trigger_cycle_done = 32'd0;
-    reg [31:0] trigger_threshold_value = 32'd0;
-    reg [31:0] trigger_count_value = 32'd0;
 
     int fc; //, fd, f, fdebug; // File Descriptors for I/O of test
     int code, dummy, data_from_file; // Used for file I/O intermediate steps
@@ -478,7 +453,6 @@ module L1_trigger_wrapper_tb;
         end else if (THIS_STIM == "GAUSS_HARDRESET" ||THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" || THIS_STIM == "GAUSS_THRESH_WRITE" ) begin : GAUSS_RESET_RUN
 
             $display("Beginning Random Gaussian Stimulus");
-            reset_delay = TRIGGER_CLOCKS * 3;
             forever begin: FILL_STIM_GAUSS_LOOP 
                 #0.01;
 
@@ -499,7 +473,7 @@ module L1_trigger_wrapper_tb;
     end
 
 
-    int reset_delay = 0;
+    int reset_delay = TRIGGER_CLOCKS * 3;
     initial begin
         if (THIS_STIM == "GAUSS_RESET") begin 
             forever begin:RESET_LOOP
