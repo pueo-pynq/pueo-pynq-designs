@@ -3,8 +3,8 @@
 `include "L1Beams_header.vh"
 module L1_trigger_wrapper_tb;
     
-    parameter       THIS_DESIGN = "BASIC";
-    parameter       THIS_STIM   = "ALL_SOFT_RESET"; // Other options are:
+    parameter       THIS_DESIGN = "NO_BQ";//"BASIC"
+    parameter       THIS_STIM   = "ONLY_PULSES"; // Other options are:
                                                         //"GAUSS_STARTSTOP"
                                                         //"GAUSS_RESET"
                                                         //"ONLY_PULSES"
@@ -13,7 +13,7 @@ module L1_trigger_wrapper_tb;
                                                         //"GAUSS_RAND"
                                                         //"GAUSS_THRESH_WRITE"
                                                         //"ALL_SOFT_RESET"
-
+                                                        //"AGC_READ"
     // Clocks per L1 trigger sampling cycle
     parameter [47:0] TRIGGER_CLOCKS = 375; 
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
@@ -168,6 +168,7 @@ module L1_trigger_wrapper_tb;
 
             L1_trigger_wrapper #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
                                     .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
+                                    .USE_BIQUADS("TRUE"),
                                     .STARTING_TARGET(100), // Target triggers per period
                                     .COUNT_MARGIN(5), // +- Margin on triggers per period
                                     .STARTING_DELTA(100)) // Threshold change amount per correction
@@ -180,9 +181,22 @@ module L1_trigger_wrapper_tb;
                     .dat_i(sample_arr),
                     .trigger_o(trigger));
 
-        end else begin : DEFAULT
+        end else if(THIS_DESIGN == "NO_BQ") begin : NO_BIQUAD
 
-            // Something else
+            L1_trigger_wrapper #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
+                                    .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
+                                    .USE_BIQUADS("FALSE"),
+                                    .STARTING_TARGET(100), // Target triggers per period
+                                    .COUNT_MARGIN(5), // +- Margin on triggers per period
+                                    .STARTING_DELTA(100)) // Threshold change amount per correction
+                u_L1_trigger(
+                    .wb_clk_i(wbclk),
+                    .wb_rst_i(wbreset),
+                    `CONNECT_WBS_IFM( wb_ , wb_L1_ ),
+                    .reset_i(reset), 
+                    .aclk(aclk),
+                    .dat_i(sample_arr),
+                    .trigger_o(trigger));
 
         end
     endgenerate
@@ -495,13 +509,13 @@ module L1_trigger_wrapper_tb;
                 @(posedge aclk);
                 reset_delay = reset_delay-1;
                 if(reset_delay == 0) begin
-                    do_write_L1(22'h1001, 1); 
+                    do_write_L1(22'h1004, 1); 
                     reset_delay = TRIGGER_CLOCKS*6;
                 end
 
                 agc_reset_delay = agc_reset_delay-1;
                 if(agc_reset_delay == 0) begin
-                    do_write_L1(22'h1001, 2); 
+                    do_write_L1(22'h1004, 2); 
                     agc_reset_delay = TRIGGER_CLOCKS*6;
                 end
             end
@@ -572,5 +586,27 @@ module L1_trigger_wrapper_tb;
             end
         end
     end
+
+    reg [21:0] AGC_out_data = 0;
+    initial begin
+        if (THIS_STIM == "AGC_READ") begin 
+            forever begin: AGC_READ_LOOP
+                @(posedge aclk);
+                if(start_delay>0) start_delay = start_delay-1;
+                if(start_delay == 0) begin
+                    do_read_L1(22'h4000, AGC_out_data); 
+                    do_read_L1(22'h4004, AGC_out_data);
+                    do_read_L1(22'h4008, AGC_out_data);
+                    do_read_L1(22'h400C, AGC_out_data);
+                    do_read_L1(22'h4010, AGC_out_data);
+                    do_read_L1(22'h4014, AGC_out_data);
+                    do_read_L1(22'h4040, AGC_out_data);
+                    do_read_L1(22'h4044, AGC_out_data);
+                    start_delay = TRIGGER_CLOCKS*6;
+                end
+            end
+        end
+    end
+
     
 endmodule
