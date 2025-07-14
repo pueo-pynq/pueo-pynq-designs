@@ -3,7 +3,7 @@
 module biquad8_design(
         input wb_clk_i,
         input wb_rst_i,
-        `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ),        
+        `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ), // Address width, data width. Address is at size limit
         input capture_i,
         input aclk,
         input aresetn,
@@ -56,7 +56,7 @@ module biquad8_design(
         assign from``tready = to``tready
     
     // dumb testing    
-    `DEFINE_WB_IF( bq0_ , 7, 32);
+    `DEFINE_WB_IF( bq0_ , 7, 32);// Address width, data width   
     `DEFINE_WB_IF( bq1_ , 7, 32);
     // stupidest intercon ever
     assign wb_ack_o = (wb_adr_i[7]) ? bq1_ack_i : bq0_ack_i;
@@ -162,7 +162,8 @@ module biquad8_design(
                   .clk_i(aclk),
                   .rst_i(biquad_reset),
                   .global_update_i(1'b0),
-                  .dat_i(unpack(gate0_tdata)),
+                //   .dat_i(unpack(gate0_tdata)),
+                  .dat_i(unpack(adc0_tdata)),
                   .dat_o(bq_out[0]));   
 
     biquad8_wrapper #(.NBITS(12),
@@ -178,7 +179,8 @@ module biquad8_design(
                   .clk_i(aclk),
                   .rst_i(biquad_reset),
                   .global_update_i(1'b0),
-                  .dat_i(unpack(gate1_tdata)),
+                //   .dat_i(unpack(gate1_tdata)),
+                  .dat_i(bq_out[0]),
                   .dat_o(bq_out[1]));   
 
     `AXIS_ASSIGN( gate0_ , buf0_ );
