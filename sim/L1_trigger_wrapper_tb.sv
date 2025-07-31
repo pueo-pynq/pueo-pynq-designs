@@ -1,10 +1,12 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
-`include "L1Beams_header.vh"
+`include "L1Beams_header_old.vh"
+
 module L1_trigger_wrapper_tb;
     
     parameter       THIS_DESIGN = "NO_BQ";//"BASIC"
-    parameter       THIS_STIM   = "ONLY_PULSES"; // Other options are:
+    parameter       HDL_FILTER_VERSION = "MINDSP";//"SYSTOLIC";
+    parameter       THIS_STIM   = "FILE"; // Other options are:
                                                         //"GAUSS_STARTSTOP"
                                                         //"GAUSS_RESET"
                                                         //"ONLY_PULSES"
@@ -14,6 +16,7 @@ module L1_trigger_wrapper_tb;
                                                         //"GAUSS_THRESH_WRITE"
                                                         //"ALL_SOFT_RESET"
                                                         //"AGC_READ"
+                                                        //"ONLY_PULSES"
     // Clocks per L1 trigger sampling cycle
     parameter [47:0] TRIGGER_CLOCKS = 375; 
     parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
@@ -169,6 +172,7 @@ module L1_trigger_wrapper_tb;
             L1_trigger_wrapper #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
                                     .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
                                     .USE_BIQUADS("TRUE"),
+                                    .HDL_FILTER_VERSION(HDL_FILTER_VERSION),
                                     .STARTING_TARGET(100), // Target triggers per period
                                     .COUNT_MARGIN(5), // +- Margin on triggers per period
                                     .STARTING_DELTA(100)) // Threshold change amount per correction
@@ -185,6 +189,7 @@ module L1_trigger_wrapper_tb;
 
             L1_trigger_wrapper #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
                                     .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
+                                    .HDL_FILTER_VERSION(HDL_FILTER_VERSION),
                                     .USE_BIQUADS("FALSE"),
                                     .STARTING_TARGET(100), // Target triggers per period
                                     .COUNT_MARGIN(5), // +- Margin on triggers per period
@@ -219,140 +224,144 @@ module L1_trigger_wrapper_tb;
         @(posedge wbclk);
         @(posedge wbclk);
 
-        for(int idx=0; idx<8; idx=idx+1) begin: BQ_PREP_BY_CHAN
+        if(THIS_DESIGN != "NO_BQ") begin: USING_BQ
+            for(int idx=0; idx<8; idx=idx+1) begin: BQ_PREP_BY_CHAN
 
-            for (int bqidx=0; bqidx<2; bqidx = bqidx+1) begin: BQ_LOOP
+                for (int bqidx=0; bqidx<2; bqidx = bqidx+1) begin: BQ_LOOP
 
-                $display($sformatf("Prepping Chan %1d Biquad %1d", idx, bqidx));
-                $display($sformatf("Notch at %1d MHz, Q at %1d", notch[bqidx], Q[bqidx]));
-                $display("Using moving notch");
-                // LOAD BIQUAD NOTCH COEFFICIENTS FROM A FILE
-                if (bqidx==0) begin
-                    fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", (notch[bqidx] + 15*idx), Q[bqidx]),"r");
-                end else begin
-                    fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", (notch[bqidx]), Q[bqidx]),"r");
-                end
+                    $display($sformatf("Prepping Chan %1d Biquad %1d", idx, bqidx));
+                    $display($sformatf("Notch at %1d MHz, Q at %1d", notch[bqidx], Q[bqidx]));
+                    $display("Using moving notch");
+                    // LOAD BIQUAD NOTCH COEFFICIENTS FROM A FILE
+                    if (bqidx==0) begin
+                        fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", (notch[bqidx] + 15*idx), Q[bqidx]),"r");
+                    end else begin
+                        fc = $fopen($sformatf("freqs/coefficients_updated/coeff_file_%1dMHz_%1d.dat", (notch[bqidx]), Q[bqidx]),"r");
+                    end
 
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h04, coeff_from_file); // B
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h04, coeff_from_file); // A
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h04, coeff_from_file); // B
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h04, coeff_from_file); // A
 
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_2
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_3  // Yes, this is the correct order according to the documentation
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_1
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_0
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_2
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_3  // Yes, this is the correct order according to the documentation
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_1
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h08, coeff_from_file); // C_0
 
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h0C, coeff_from_file); // a_1'  // For incremental computation
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h0C, coeff_from_file); // a_2'
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h0C, coeff_from_file); // a_1'  // For incremental computation
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h0C, coeff_from_file); // a_2'
 
-                // f FIR
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file); // D_FF  
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file); // X_6    
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file); // X_5   
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_4   
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_3   
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_2   
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_1 
-            
-                // g FIR
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // E_GG  
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file); // X_7 
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_6
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_5    
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_4  
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_3  
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_2  
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_1 
+                    // f FIR
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file); // D_FF  
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file); // X_6    
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file); // X_5   
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_4   
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_3   
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_2   
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h10, coeff_from_file);  // X_1 
                 
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h18, coeff_from_file);  // D_FG
+                    // g FIR
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // E_GG  
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file); // X_7 
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_6
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_5    
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_4  
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_3  
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_2  
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h14, coeff_from_file);  // X_1 
+                    
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h18, coeff_from_file);  // D_FG
 
-                code = $fgets(str, fc);
-                dummy = $sscanf(str, "%d", coeff_from_file);
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h1C, coeff_from_file);  // E_GF
+                    code = $fgets(str, fc);
+                    dummy = $sscanf(str, "%d", coeff_from_file);
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h1C, coeff_from_file);  // E_GF
 
-                do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h00, 32'd1 );     // Update
-            end 
+                    do_write_bq( bqidx*8'h80 + idx * 22'h400 + 8'h00, 32'd1 );     // Update
+                end 
+            end
         end
 
-
         #200;
-        // forever begin
-        //     #0.01;
-        //     for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
-        //         do_read_agc(5'b10000 + idx * 22'h400, read_in_val);
-        //         $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400, read_in_val));
-        //         do_read_agc(5'b10000 + 1 + idx * 22'h400, read_in_val);
-        //         $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400 + 1, read_in_val));
-        //         do_read_agc(5'b00100 + idx * 22'h400, read_in_val);
-        //         $display($sformatf("AGC 0x%1h: %1d",5'b10100 + idx * 22'h400, read_in_val));
-        //         do_read_L1(0, read_in_val);
-        //         $display($sformatf("trigger 0x%1h: %1d",0, read_in_val));
-        //         do_read_L1(1, read_in_val);
-        //         $display($sformatf("trigger 0x%1h: %1d",1, read_in_val));
-        //         do_read_L1(2, read_in_val);
-        //         $display($sformatf("trigger 0x%1h: %1d",2, read_in_val));
-        //         do_read_L1(3, read_in_val);
-        //         $display($sformatf("trigger 0x%1h: %1d",3, read_in_val));
-        //         do_read_L1(4, read_in_val);
-        //         $display($sformatf("trigger 0x%1h: %1d",4, read_in_val));
-        //         do_read_L1(5, read_in_val);
-        //         $display($sformatf("trigger 0x%1h: %1d",5, read_in_val));
+        forever begin
+            #0.01;
+            for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
+                do_read_agc(5'b10000 + idx * 22'h400, read_in_val);
+                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400, read_in_val));
+                do_read_agc(5'b10000 + 1 + idx * 22'h400, read_in_val);
+                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400 + 1, read_in_val));
+                do_read_agc(5'b00100 + idx * 22'h400, read_in_val);
+                $display($sformatf("AGC 0x%1h: %1d",5'b10100 + idx * 22'h400, read_in_val));
+                do_read_L1(0, read_in_val);
+                $display($sformatf("trigger 0x%1h: %1d",0, read_in_val));
+                do_read_L1(1, read_in_val);
+                $display($sformatf("trigger 0x%1h: %1d",1, read_in_val));
+                do_read_L1(2, read_in_val);
+                $display($sformatf("trigger 0x%1h: %1d",2, read_in_val));
+                do_read_L1(3, read_in_val);
+                $display($sformatf("trigger 0x%1h: %1d",3, read_in_val));
+                do_read_L1(4, read_in_val);
+                $display($sformatf("trigger 0x%1h: %1d",4, read_in_val));
+                do_read_L1(5, read_in_val);
+                $display($sformatf("trigger 0x%1h: %1d",5, read_in_val));
 
             
-        //     end
-        // end
+            end
+        end
     end
 
 
     // Stimulus
     int clocks = 0;
+    int fd[7:0];
+    int f;
+    int code, dummy, data_from_file; // Used for file I/O intermediate steps
     initial begin: STIM_LOOP
         #150;
         $display("Setup");
@@ -398,8 +407,7 @@ module L1_trigger_wrapper_tb;
                     samples[idx] = stim_vals[idx];
                 end
             end
-            $display("Ending CW Stimulus (how did this even happen?)");
-            
+            $display("Ending CW Stimulus (how did this even happen?)");     
         end else if (THIS_STIM == "GAUSS_RAND_PULSES") begin
             $display("THIS_DESIGN set to GAUSS_RAND_PULSES");  
             forever begin
@@ -465,8 +473,49 @@ module L1_trigger_wrapper_tb;
                     end
                 end
             end   
-        end else begin//if (THIS_STIM == "GAUSS_HARDRESET" ||THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" || THIS_STIM == "GAUSS_THRESH_WRITE" ) begin : GAUSS_RESET_RUN
+        end else if (THIS_STIM == "FILE") begin
+            // Send in ADC data from files
+            $display("Reading input from file");
+            for(int in_count=0; in_count<600; in_count = in_count+1) begin
+                for(int chan_idx=0; chan_idx<8; chan_idx = chan_idx+1) begin
+                    fd[chan_idx] = $fopen($sformatf("freqs/inputs/thermal_surf_25_chan_%0d_event_%0d.csv", chan_idx, in_count),"r");
+                end
+                // f = $fopen($sformatf("freqs/outputs/thermal_surf_25_chan_%0d_event_%0d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
 
+                // fdebug = $fopen($sformatf("freqs/outputs/trigger_chain_output_lpf_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
+                // $monitor($sformatf("freqs/outputs/trigger_chain_output_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch,Q));
+
+                code = 1;
+
+                for(int clocks=0;clocks<((256)/8);clocks++) begin // 1024, but only take the first few
+                    @(posedge aclk);
+                    #0.01;
+                    
+                    for(int chan_idx=0; chan_idx<8; chan_idx = chan_idx+1) begin
+                        for (int i=0; i<8; i++) begin
+                            // Get the next inputs
+                            code = $fgets(str, fd[chan_idx]);
+                            dummy = $sscanf(str, "%d", data_from_file);
+                            samples[chan_idx][i] = data_from_file;
+                            // $fwrite(f,$sformatf("%1d\n",outsample[i]));
+                            // $fwrite(fdebug,$sformatf("%1d\n",probe0[i]));
+                            #0.01;
+                        end
+                    end
+                end
+
+                // Biquad reset
+                reset_reg = 1'b1;
+                for(int clocks=0;clocks<32;clocks++) begin
+                    @(posedge aclk);
+                    #0.01;
+                end
+                reset_reg = 1'b0;
+                $fclose(fd);
+                $fclose(fdebug);
+                $fclose(f);
+            end
+        end else begin//if (THIS_STIM == "GAUSS_HARDRESET" ||THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" || THIS_STIM == "GAUSS_THRESH_WRITE" ) begin : GAUSS_RESET_RUN
             $display("Beginning Random Gaussian Stimulus");
             forever begin: FILL_STIM_GAUSS_LOOP 
                 #0.01;
