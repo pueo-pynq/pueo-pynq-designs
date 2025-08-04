@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
-`include "L1Beams_header_old.vh"
+`include "L1Beams_header.vh"
 
 module L1_trigger_wrapper_tb;
     
@@ -19,11 +19,11 @@ module L1_trigger_wrapper_tb;
                                                         //"ONLY_PULSES"
     // Clocks per L1 trigger sampling cycle
     parameter [47:0] TRIGGER_CLOCKS = 375; 
-    parameter TIMESCALE_REDUCTION_BITS = 8; // Make the AGC period easier to simulate
+    parameter TIMESCALE_REDUCTION_BITS = 5; // Make the AGC period easier to simulate
     parameter NCHAN = 8;
     parameter NSAMP = 8;
     parameter NBITS = 12;
-    parameter NBEAMS = 2;
+    parameter NBEAMS = 46;
     parameter ALIGNED_BEAM = 0;
 
     // Notch location
@@ -169,7 +169,8 @@ module L1_trigger_wrapper_tb;
     generate
         if (THIS_DESIGN == "BASIC") begin : BASIC
 
-            L1_trigger_wrapper #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
+            L1_trigger_wrapper #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS),
+                                    .NBEAMS(NBEAMS),
                                     .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
                                     .USE_BIQUADS("TRUE"),
                                     .HDL_FILTER_VERSION(HDL_FILTER_VERSION),
@@ -188,6 +189,7 @@ module L1_trigger_wrapper_tb;
         end else if(THIS_DESIGN == "NO_BQ") begin : NO_BIQUAD
 
             L1_trigger_wrapper #(   .AGC_TIMESCALE_REDUCTION_BITS(TIMESCALE_REDUCTION_BITS), 
+                                    .NBEAMS(NBEAMS),
                                     .TRIGGER_CLOCKS(TRIGGER_CLOCKS),
                                     .HDL_FILTER_VERSION(HDL_FILTER_VERSION),
                                     .USE_BIQUADS("FALSE"),
@@ -329,39 +331,41 @@ module L1_trigger_wrapper_tb;
         end
 
         #200;
-        forever begin
-            #0.01;
-            for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
-                do_read_agc(5'b10000 + idx * 22'h400, read_in_val);
-                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400, read_in_val));
-                do_read_agc(5'b10000 + 1 + idx * 22'h400, read_in_val);
-                $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400 + 1, read_in_val));
-                do_read_agc(5'b00100 + idx * 22'h400, read_in_val);
-                $display($sformatf("AGC 0x%1h: %1d",5'b10100 + idx * 22'h400, read_in_val));
-                do_read_L1(0, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",0, read_in_val));
-                do_read_L1(1, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",1, read_in_val));
-                do_read_L1(2, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",2, read_in_val));
-                do_read_L1(3, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",3, read_in_val));
-                do_read_L1(4, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",4, read_in_val));
-                do_read_L1(5, read_in_val);
-                $display($sformatf("trigger 0x%1h: %1d",5, read_in_val));
+        // forever begin
+        //     #0.01;
+        //     for(int idx=0; idx<8; idx=idx+1) begin: AGC_LOOP_BY_CHAN
+        //         do_read_agc(5'b10000 + idx * 22'h400, read_in_val);
+        //         $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400, read_in_val));
+        //         do_read_agc(5'b10000 + 1 + idx * 22'h400, read_in_val);
+        //         $display($sformatf("AGC 0x%1h: %1d",5'b10000 + idx * 22'h400 + 1, read_in_val));
+        //         do_read_agc(5'b00100 + idx * 22'h400, read_in_val);
+        //         $display($sformatf("AGC 0x%1h: %1d",5'b10100 + idx * 22'h400, read_in_val));
+        //         do_read_L1(0, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",0, read_in_val));
+        //         do_read_L1(1, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",1, read_in_val));
+        //         do_read_L1(2, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",2, read_in_val));
+        //         do_read_L1(3, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",3, read_in_val));
+        //         do_read_L1(4, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",4, read_in_val));
+        //         do_read_L1(5, read_in_val);
+        //         $display($sformatf("trigger 0x%1h: %1d",5, read_in_val));
 
             
-            end
-        end
+        //     end
+        // end
     end
 
 
     // Stimulus
     int clocks = 0;
+    int in_count = 0;
     int fd[7:0];
     int f;
     int code, dummy, data_from_file; // Used for file I/O intermediate steps
+    int sample_store[599:0][7:0][1023:0][7:0];//events, channels, clocks, samples
     initial begin: STIM_LOOP
         #150;
         $display("Setup");
@@ -475,45 +479,64 @@ module L1_trigger_wrapper_tb;
             end   
         end else if (THIS_STIM == "FILE") begin
             // Send in ADC data from files
-            $display("Reading input from file");
-            for(int in_count=0; in_count<600; in_count = in_count+1) begin
+            $display("Reading input from files");
+            for(in_count=0; in_count<600; in_count = in_count+1) begin
                 for(int chan_idx=0; chan_idx<8; chan_idx = chan_idx+1) begin
                     fd[chan_idx] = $fopen($sformatf("freqs/inputs/thermal_surf_25_chan_%0d_event_%0d.csv", chan_idx, in_count),"r");
                 end
-                // f = $fopen($sformatf("freqs/outputs/thermal_surf_25_chan_%0d_event_%0d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
-
-                // fdebug = $fopen($sformatf("freqs/outputs/trigger_chain_output_lpf_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
-                // $monitor($sformatf("freqs/outputs/trigger_chain_output_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch,Q));
-
-                code = 1;
-
-                for(int clocks=0;clocks<((256)/8);clocks++) begin // 1024, but only take the first few
-                    @(posedge aclk);
-                    #0.01;
-                    
-                    for(int chan_idx=0; chan_idx<8; chan_idx = chan_idx+1) begin
-                        for (int i=0; i<8; i++) begin
+                for(int chan_idx=0; chan_idx<8; chan_idx = chan_idx+1) begin
+                    for(int clocks=0; clocks<1024/8; clocks=clocks+1) begin
+                        for (int samp_idx=0; samp_idx<8; samp_idx++) begin
                             // Get the next inputs
                             code = $fgets(str, fd[chan_idx]);
                             dummy = $sscanf(str, "%d", data_from_file);
-                            samples[chan_idx][i] = data_from_file;
-                            // $fwrite(f,$sformatf("%1d\n",outsample[i]));
-                            // $fwrite(fdebug,$sformatf("%1d\n",probe0[i]));
-                            #0.01;
+                            sample_store[in_count][chan_idx][clocks][samp_idx] = data_from_file;
                         end
                     end
                 end
-
-                // Biquad reset
-                reset_reg = 1'b1;
-                for(int clocks=0;clocks<32;clocks++) begin
-                    @(posedge aclk);
-                    #0.01;
+                for(int chan_idx=0; chan_idx<8; chan_idx = chan_idx+1) begin
+                    $fclose(fd[chan_idx]);
                 end
-                reset_reg = 1'b0;
-                $fclose(fd);
-                $fclose(fdebug);
-                $fclose(f);
+                $display($sformatf("\tRead in event %1d",in_count));
+            end
+
+
+            $display("Resets and Beam Writes");
+            @(posedge aclk);
+            for(int beam_idx=0; beam_idx<46; beam_idx=beam_idx+1) begin
+                do_write_L1(22'h1004+beam_idx*4, 3); // Reset
+                do_write_L1(22'h1000+beam_idx*4, 2); // Freeze loop
+                do_write_L1(22'h800+beam_idx*4, 20000); // Freeze loop
+            end
+
+
+
+            $display("Applying input from files");
+            forever begin
+                for(in_count=0; in_count<600; in_count = in_count+1) begin
+                    // f = $fopen($sformatf("freqs/outputs/thermal_surf_25_chan_%0d_event_%0d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
+
+                    // fdebug = $fopen($sformatf("freqs/outputs/trigger_chain_output_lpf_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch, Q), "w");
+                    // $monitor($sformatf("freqs/outputs/trigger_chain_output_gauss_%1d_trial_%0d_notch_%0d_MHz_%1d.txt", GAUSS_NOISE_SIZE, in_count, notch,Q));
+
+                    code = 1;
+
+                    for(int clocks=0;clocks<((1024)/8);clocks++) begin // 1024,split among 8 
+                        @(posedge aclk);
+                        #0.01;
+                        
+                        for(int chan_idx=0; chan_idx<8; chan_idx = chan_idx+1) begin
+                            for (int samp_idx=0; samp_idx<8; samp_idx++) begin
+                                samples[chan_idx][samp_idx] = sample_store[in_count][chan_idx][clocks][samp_idx];
+                                // $fwrite(f,$sformatf("%1d\n",outsample[i]));
+                                // $fwrite(fdebug,$sformatf("%1d\n",probe0[i]));
+                                #0.01;
+                            end
+                        end
+                    end
+                    // $fclose(fdebug);
+                    // $fclose(f);
+                end
             end
         end else begin//if (THIS_STIM == "GAUSS_HARDRESET" ||THIS_STIM == "GAUSS_RESET" || THIS_STIM == "GAUSS_STARTSTOP" || THIS_STIM == "GAUSS_THRESH_WRITE" ) begin : GAUSS_RESET_RUN
             $display("Beginning Random Gaussian Stimulus");
