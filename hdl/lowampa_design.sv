@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
-module lowampa_design(
+module lowampa_design #(parameter NBEAMS=54, parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
         input wb_clk_i,
         input wb_rst_i,
         `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ),
@@ -8,14 +8,15 @@ module lowampa_design(
         input aresetn,
         input capture_waiting,
         output reg capture_enable = 1,
-        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc0_ , 128 ),
-        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc1_ , 128 ),
-        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc2_ , 128 ),
-        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc3_ , 128 ),
-        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc4_ , 128 ),
-        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc5_ , 128 ),
-        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc6_ , 128 ),
-        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc7_ , 128 ),
+        output trigger,
+        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc0_ , 64 ),
+        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc1_ , 64 ),
+        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc2_ , 64 ),
+        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc3_ , 64 ),
+        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc4_ , 64 ),
+        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc5_ , 64 ),
+        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc6_ , 64 ),
+        `TARGET_NAMED_PORTS_AXI4S_MIN_IF( adc7_ , 64 ),
 
         `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf0_ , 128 ),
         `HOST_NAMED_PORTS_AXI4S_MIN_IF( buf1_ , 128 ),
@@ -26,38 +27,7 @@ module lowampa_design(
         `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac1_ , 128 )
     );
     
-    //capture logic
-    reg [63:0] counter = 0;
-    reg [63:0] countermax = 63'd175000000;
-    always @(posedge aclk)
-    begin
-        if(capture_waiting)
-        begin
-           if(capture_enable)
-           begin
-                //NOP
-           end  
-           else
-           begin
-             if(counter <= countermax)
-             begin
-                counter <= counter+1;
-             end
-             else
-             begin
-                counter <=0;
-                capture_enable <= 1;
-             end
-           end
-        end
-        else
-        begin  
-           capture_enable <=0;
-        end
-        
-    end
-    
-    // UNPACK is 128 -> 96
+ // UNPACK is 128 -> 96
     function [47:0] unpack;
         input [63:0] data_in;
         integer i;
@@ -78,56 +48,210 @@ module lowampa_design(
             end
         end
     endfunction    
-   
-    reg ack = 0;
-    always @(posedge wb_clk_i) ack <= wb_cyc_i && wb_stb_i;
-    assign wb_dat_o = "BSC0";
-    assign wb_ack_o = ack && wb_cyc_i;
-    assign wb_err_o = 1'b0;
-    assign wb_rty_o = 1'b0;
+    // MIDPACK is 40 -> 128
+    // Note that these values are stored not entirely MSB
+    function [127:0] midpack;
+        input [39:0] data_in;
+        integer i;
+        begin
+            for (i=0;i<8;i=i+1) begin
+                midpack[(16*i+9) +: 7] = {11{1'b0}};
+                midpack[(16*i+4) +: 5] = data_in[5*i +: 5];
+                midpack[(16*i) +: 4] = {4{1'b0}};
+            end
+        end
+    endfunction
 
-    wire [95:0] filt_out[3:0];
-    wire filt_valid[3:0];
-    reg [63:0] adc_extend;
-    
-   
-    shannon_whitaker_lpfull_vlowampa #(.NBITS(12),.OUTQ_INT(12),.OUTQ_FRAC(0)) 
-      u_lpfull0( .clk_i(aclk),
-		.in_i(unpack(adc0_tdata)),
-		.out_o( filt_out[0] ),
-		.out_valid(filt_valid[0]) );
-    shannon_whitaker_lpfull_vlowampa #(.NBITS(12),.OUTQ_INT(12),.OUTQ_FRAC(0)) 
-      u_lpfull1( .clk_i(aclk),
-		.in_i(unpack(adc1_tdata)),
-		.out_o( filt_out[1] ),
-		.out_valid(filt_valid[1]) );
-    shannon_whitaker_lpfull_vlowampa #(.NBITS(12),.OUTQ_INT(12),.OUTQ_FRAC(0)) 
-      u_lpfull2( .clk_i(aclk),
-		.in_i(unpack(adc2_tdata)),
-		.out_o( filt_out[2] ),
-		.out_valid(filt_valid[2]) );
-    shannon_whitaker_lpfull_vlowampa #(.NBITS(12),.OUTQ_INT(12),.OUTQ_FRAC(0)) 
-      u_lpfull3( .clk_i(aclk),
-		.in_i(unpack(adc3_tdata)),
-		.out_o( filt_out[3] ),
-		.out_valid(filt_valid[3]) );
 
-   `define ASSIGN( f, t, v) \
+    `define ASSIGN( f, t) \
         assign f``tdata = pack(t);  \
-        assign f``tvalid = v
-       
-   always @(posedge aclk)
-   begin
-        adc_extend <= adc0_tdata;
-   end
-   
-       
-   `ASSIGN( buf0_ , filt_out[0], filt_valid[0] );
-   `ASSIGN( buf1_ , {unpack(adc0_tdata),unpack(adc_extend)}, filt_valid[0] );
-   `ASSIGN( buf2_ , filt_out[2],filt_valid[2]  );
-   `ASSIGN( buf3_ , filt_out[3],filt_valid[3]  );
+        assign f``tvalid = 1'b1
 
-   `ASSIGN( dac0_ , filt_out[0], filt_valid[0] );
-   `ASSIGN( dac1_ , filt_out[0], filt_valid[0] );
+    `define MIDASSIGN( f, t) \
+        assign f``tdata = midpack(t);  \
+        assign f``tvalid = 1'b1;
+
+    wire [7:0][47:0] repacked_data;
+    assign repacked_data[0] = unpack(adc0_tdata);
+    assign repacked_data[1] = unpack(adc1_tdata);
+    assign repacked_data[2] = unpack(adc2_tdata);
+    assign repacked_data[3] = unpack(adc3_tdata);
+    assign repacked_data[4] = unpack(adc4_tdata);
+    assign repacked_data[5] = unpack(adc5_tdata);
+    assign repacked_data[6] = unpack(adc6_tdata);
+    assign repacked_data[7] = unpack(adc7_tdata);
+
+    // REPACK updacked ADC into dat_i
+
+
+    wire [3:0][19:0] dat_o;
+    wire [3:0][1:0][47:0] dat_debug;
+    wire [NBEAMS-1:0] trig_out;
+    //wire [207:0] debug_envelope;
+
+    lowampa_trigger_wrapper #(
+        .AGC_TIMESCALE_REDUCTION_BITS(2),
+        .NBEAMS(NBEAMS)
+    ) u_lowampa_trigger_wrapper (
+        .wb_clk_i(wb_clk_i),
+        .wb_rst_i(wb_rst_i),
+        `CONNECT_WBS_IFS( wb_ , wb_), // Pass right through (s to s)
+        .aclk(aclk),
+        .aclk_phase_i(),
+        
+        .tclk(aclk),
+        .dat_i(repacked_data),
+        //.debug_envelope(debug_envelope),
+        
+        //.reset_i(reset_i), 
+                    
+        .ifclk(aclk),
+        .ifclk_running_i(),
+        .runrst_i(),
+        .runstop_i(),
+        
+        //.dat_o(dat_o),
+        .dat_debug(dat_debug)//,
+        //.trigger_o(trig_out)
+    );
+
+    assign trigger = (trig_out!=0);
+    
+    wire [95:0] long_repacked_data;
+    reg [47:0] repacked_data_store = 48'b0;
+    assign long_repacked_data = {repacked_data[0],repacked_data_store};
+    always @(posedge aclk)
+    begin
+        repacked_data_store <= repacked_data[0];
+    end
+    
+//    wire [95:0] long_repacked_data2;
+//    reg [47:0] repacked_data_store2 = 48'b0;
+//    assign long_repacked_data2 = {repacked_data[6],repacked_data_store2};
+//    always @(posedge aclk)
+//    begin
+//        repacked_data_store2 <= repacked_data[6];
+//    end
+    
+//    wire [95:0] long_repacked_data3;
+//    reg [47:0] repacked_data_store3 = 48'b0;
+//    assign long_repacked_data3 = {repacked_data[4],repacked_data_store3};
+//    always @(posedge aclk)
+//    begin
+//        repacked_data_store3 <= repacked_data[4];
+//    end
+
+    wire [95:0] long_repacked_data4;
+    reg [47:0] repacked_data_store4 = 48'b0;
+    assign long_repacked_data4 = {repacked_data[6],repacked_data_store4};
+    always @(posedge aclk)
+    begin
+        repacked_data_store4 <= repacked_data[6];
+    end
+    
+//    reg [63:0] previous_signed_envelope;
+//    wire [63:0] beamforming_signed_envelope;
+//    assign beamforming_signed_envelope = {{8{debug_envelope[103]}},debug_envelope[103:96],{8{debug_envelope[71]}},debug_envelope[71:64],{8{debug_envelope[39]}},debug_envelope[39:32],{8{debug_envelope[7]}},debug_envelope[7:0]};
+//    always @(posedge aclk)
+//    begin
+//        previous_signed_envelope <= beamforming_signed_envelope;
+//    end
+
+
+//    reg [63:0] previous_signed_envelope2;
+//    wire [63:0] beamforming_signed_envelope2;
+//    assign beamforming_signed_envelope2 = {{8{debug_envelope[111]}},debug_envelope[111:104],{8{debug_envelope[79]}},debug_envelope[79:72],{8{debug_envelope[47]}},debug_envelope[47:40],{8{debug_envelope[15]}},debug_envelope[15:8]};
+//    always @(posedge aclk)
+//    begin
+//        previous_signed_envelope2 <= beamforming_signed_envelope2;
+//    end
+
+
+//    reg [63:0] previous_signed_envelope3;
+//    wire [63:0] beamforming_signed_envelope3;
+//    assign beamforming_signed_envelope3 = {{8{debug_envelope[119]}},debug_envelope[119:112],{8{debug_envelope[87]}},debug_envelope[87:80],{8{debug_envelope[55]}},debug_envelope[55:48],{8{debug_envelope[23]}},debug_envelope[23:16]};
+//    always @(posedge aclk)
+//    begin
+//        previous_signed_envelope3 <= beamforming_signed_envelope3;
+//    end
+
+
+//    reg [63:0] previous_signed_envelope4;
+//    wire [63:0] beamforming_signed_envelope4;
+//    assign beamforming_signed_envelope4 = {{8{debug_envelope[127]}},debug_envelope[127:120],{8{debug_envelope[95]}},debug_envelope[95:88],{8{debug_envelope[63]}},debug_envelope[63:56],{8{debug_envelope[31]}},debug_envelope[31:24]};
+//    always @(posedge aclk)
+//    begin
+//        previous_signed_envelope4 <= beamforming_signed_envelope4;
+//    end
+    
+//    reg [63:0] previous_square;
+//    wire [63:0] beamforming_square;
+//    assign beamforming_square = debug_envelope[191:128];
+//    always @(posedge aclk)
+//    begin
+//        previous_square <= beamforming_square;
+//    end
+    
+//    reg [63:0] previous_envelope;
+//    wire [63:0] beamforming_envelope;
+//    assign beamforming_envelope = {debug_envelope[207:192],debug_envelope[207:192],debug_envelope[207:192],debug_envelope[207:192]};
+//    always @(posedge aclk)
+//    begin
+//        previous_envelope <= beamforming_envelope;
+//    end
+    
+    wire [95:0] long_repacked_lowpass_data;
+    reg [47:0] repacked_lowpass_data_store = 48'b0;
+    assign long_repacked_lowpass_data = {dat_debug[0][0],repacked_lowpass_data_store};
+    always @(posedge aclk)
+    begin
+        repacked_lowpass_data_store <= {dat_debug[0][0]};
+    end
+    
+    wire [95:0] long_repacked_matched_data;
+    reg [47:0] repacked_matched_data_store = 48'b0;
+    assign long_repacked_matched_data = {dat_debug[0][1],repacked_matched_data_store};
+    always @(posedge aclk)
+    begin
+        repacked_matched_data_store <= dat_debug[0][1];
+    end
+    
+//    wire [39:0] long_repacked_dat;
+//    reg [19:0] repacked_dat_store = 20'b0;
+//    assign long_repacked_dat = {dat_o[0],repacked_dat_store};
+//    always @(posedge aclk)
+//    begin
+//        repacked_dat_store <= dat_o[0];
+//    end
+    
+    
+    `ASSIGN( buf0_ , long_repacked_data);
+    `ASSIGN( buf1_ , long_repacked_lowpass_data);
+    `ASSIGN( buf2_ , long_repacked_matched_data);
+    `ASSIGN( buf3_ , long_repacked_data4);
+    //`ASSIGN( buf3_ , trigger );           
+//    assign buf0_tdata = {beamforming_signed_envelope,previous_signed_envelope};
+//    assign buf0_tvalid = 1'b1;
+//    assign buf1_tdata = {beamforming_signed_envelope4,previous_signed_envelope4};
+//    assign buf1_tvalid = 1'b1;
+//    assign buf2_tdata = {beamforming_square,previous_square};
+//    assign buf2_tvalid = 1'b1;
+//    `ASSIGN( buf2_ , long_repacked_data3);
+    //`ASSIGN( buf3_ , trigger );           
+//    assign buf3_tdata = {beamforming_envelope,previous_envelope};
+//    assign buf3_tvalid = 1'b1;
+    // `ASSIGN( buf0_ , filt_out[4] );
+    // `ASSIGN( buf1_ , filt_out[5] );
+    // `ASSIGN( buf2_ , filt_out[6] );
+    // `ASSIGN( buf3_ , filt_out[7] ); 
+
+    `ASSIGN( dac0_ , repacked_data[0] );
+    `ASSIGN( dac1_ ,  repacked_data[1] );
+    // `ASSIGN( dac0_ , filt_out[2] );
+    // `ASSIGN( dac1_ , filt_out[3] );
+    // `ASSIGN( dac0_ , filt_out[4] );
+    // `ASSIGN( dac1_ , filt_out[5] );
+    // `ASSIGN( dac0_ , filt_out[6] );
+    // `ASSIGN( dac1_ , filt_out[7] );
            
 endmodule
