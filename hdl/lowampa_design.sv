@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 `include "interfaces.vh"
-module lowampa_design #(parameter NBEAMS=54, parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
+module lowampa_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BITS = 2)(
         input wb_clk_i,
         input wb_rst_i,
         `TARGET_NAMED_PORTS_WB_IF( wb_ , 22, 32 ),
@@ -26,6 +26,23 @@ module lowampa_design #(parameter NBEAMS=54, parameter AGC_TIMESCALE_REDUCTION_B
 	    `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac0_ , 128 ),
         `HOST_NAMED_PORTS_AXI4S_MIN_IF( dac1_ , 128 )
     );
+    
+    wire aclk_phase_i;
+    reg [1:0] aclk_cnt = 0;
+    localparam aclk_cycle_length = 3;
+    always @(posedge aclk)
+    begin
+      if(aclk_cnt<aclk_cycle_length-1)
+      begin
+        aclk_cnt <= aclk_cnt+1;
+      end
+      else
+      begin
+        aclk_cnt <= 0;
+      end
+    end
+    assign aclk_phase_i = (aclk_cnt ==0);
+    
     
  // UNPACK is 128 -> 96
     function [47:0] unpack;
@@ -87,7 +104,17 @@ module lowampa_design #(parameter NBEAMS=54, parameter AGC_TIMESCALE_REDUCTION_B
     wire [3:0][19:0] dat_o;
     wire [3:0][1:0][47:0] dat_debug;
     wire [NBEAMS-1:0] trig_out;
-    //wire [207:0] debug_envelope;
+    wire [223:0] debug_envelope;
+    reg [223:0] debug_envelope_store1;
+    reg [223:0] debug_envelope_store2;
+    reg [223:0] debug_envelope_store3;
+    
+    always @(posedge aclk)
+    begin
+      debug_envelope_store1 <= debug_envelope;
+      debug_envelope_store2 <= debug_envelope_store1;
+      debug_envelope_store3 <= debug_envelope_store2;
+    end
 
     lowampa_trigger_wrapper #(
         .AGC_TIMESCALE_REDUCTION_BITS(2),
@@ -97,11 +124,11 @@ module lowampa_design #(parameter NBEAMS=54, parameter AGC_TIMESCALE_REDUCTION_B
         .wb_rst_i(wb_rst_i),
         `CONNECT_WBS_IFS( wb_ , wb_), // Pass right through (s to s)
         .aclk(aclk),
-        .aclk_phase_i(),
+        .aclk_phase_i(aclk_phase_i),
         
         .tclk(aclk),
         .dat_i(repacked_data),
-        //.debug_envelope(debug_envelope),
+        .debug_envelope(debug_envelope),
         
         //.reset_i(reset_i), 
                     
@@ -141,13 +168,13 @@ module lowampa_design #(parameter NBEAMS=54, parameter AGC_TIMESCALE_REDUCTION_B
 //        repacked_data_store3 <= repacked_data[4];
 //    end
 
-    wire [95:0] long_repacked_data4;
-    reg [47:0] repacked_data_store4 = 48'b0;
-    assign long_repacked_data4 = {repacked_data[6],repacked_data_store4};
-    always @(posedge aclk)
-    begin
-        repacked_data_store4 <= repacked_data[6];
-    end
+//    wire [95:0] long_repacked_data4;
+//    reg [47:0] repacked_data_store4 = 48'b0;
+//    assign long_repacked_data4 = {repacked_data[6],repacked_data_store4};
+//    always @(posedge aclk)
+//    begin
+//        repacked_data_store4 <= repacked_data[6];
+//    end
     
 //    reg [63:0] previous_signed_envelope;
 //    wire [63:0] beamforming_signed_envelope;
@@ -184,21 +211,29 @@ module lowampa_design #(parameter NBEAMS=54, parameter AGC_TIMESCALE_REDUCTION_B
 //        previous_signed_envelope4 <= beamforming_signed_envelope4;
 //    end
     
-//    reg [63:0] previous_square;
-//    wire [63:0] beamforming_square;
-//    assign beamforming_square = debug_envelope[191:128];
-//    always @(posedge aclk)
-//    begin
-//        previous_square <= beamforming_square;
-//    end
+    reg [63:0] previous_square;
+    wire [63:0] beamforming_square;
+    assign beamforming_square = debug_envelope[191:128];
+    always @(posedge aclk)
+    begin
+        previous_square <= beamforming_square;
+    end
     
-//    reg [63:0] previous_envelope;
-//    wire [63:0] beamforming_envelope;
-//    assign beamforming_envelope = {debug_envelope[207:192],debug_envelope[207:192],debug_envelope[207:192],debug_envelope[207:192]};
-//    always @(posedge aclk)
-//    begin
-//        previous_envelope <= beamforming_envelope;
-//    end
+    reg [63:0] previous_envelope;
+    wire [63:0] beamforming_envelope;
+    assign beamforming_envelope = {debug_envelope[207:192],debug_envelope[207:192],debug_envelope[207:192],debug_envelope[207:192]};
+    always @(posedge aclk)
+    begin
+        previous_envelope <= beamforming_envelope;
+    end
+    
+    reg [63:0] previous_envelope2;
+    wire [63:0] beamforming_envelope2;
+    assign beamforming_envelope2 = {debug_envelope[223:208],debug_envelope[223:208],debug_envelope[223:208],debug_envelope[223:208]};
+    always @(posedge aclk)
+    begin
+        previous_envelope2 <= beamforming_envelope2;
+    end
     
     wire [95:0] long_repacked_lowpass_data;
     reg [47:0] repacked_lowpass_data_store = 48'b0;
@@ -225,21 +260,23 @@ module lowampa_design #(parameter NBEAMS=54, parameter AGC_TIMESCALE_REDUCTION_B
 //    end
     
     
-    `ASSIGN( buf0_ , long_repacked_data);
-    `ASSIGN( buf1_ , long_repacked_lowpass_data);
-    `ASSIGN( buf2_ , long_repacked_matched_data);
-    `ASSIGN( buf3_ , long_repacked_data4);
+    `ASSIGN( buf0_ , long_repacked_matched_data);
+//    `ASSIGN( buf1_ , long_repacked_lowpass_data);
+//    `ASSIGN( buf2_ , long_repacked_matched_data);
+//    `ASSIGN( buf3_ , long_repacked_lowpass_data);
     //`ASSIGN( buf3_ , trigger );           
 //    assign buf0_tdata = {beamforming_signed_envelope,previous_signed_envelope};
 //    assign buf0_tvalid = 1'b1;
-//    assign buf1_tdata = {beamforming_signed_envelope4,previous_signed_envelope4};
-//    assign buf1_tvalid = 1'b1;
+    assign buf1_tdata = {beamforming_square,previous_square};
+    assign buf1_tvalid = 1'b1;
 //    assign buf2_tdata = {beamforming_square,previous_square};
 //    assign buf2_tvalid = 1'b1;
 //    `ASSIGN( buf2_ , long_repacked_data3);
     //`ASSIGN( buf3_ , trigger );           
-//    assign buf3_tdata = {beamforming_envelope,previous_envelope};
-//    assign buf3_tvalid = 1'b1;
+    assign buf2_tdata = {beamforming_envelope,previous_envelope};
+    assign buf2_tvalid = 1'b1;
+    assign buf3_tdata = {beamforming_envelope2,previous_envelope2};
+    assign buf3_tvalid = 1'b1;
     // `ASSIGN( buf0_ , filt_out[4] );
     // `ASSIGN( buf1_ , filt_out[5] );
     // `ASSIGN( buf2_ , filt_out[6] );
