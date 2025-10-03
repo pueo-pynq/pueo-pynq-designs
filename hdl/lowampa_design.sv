@@ -116,6 +116,19 @@ module lowampa_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BI
       debug_envelope_store3 <= debug_envelope_store2;
     end
 
+    reg [2:0] tclk_async_reset = {3{1'b0}};
+    (* ASYNC_REG = "TRUE" *)
+    reg [1:0] tclk_sync_reset = {2{1'b0}};
+    
+    always @(posedge aclk or negedge aresetn) begin
+        if (!aresetn) tclk_async_reset <= 3'b111;
+        else tclk_async_reset <= { tclk_async_reset[1:0], 1'b0 };
+    end
+    
+    always @(posedge aclk) begin
+        tclk_sync_reset <= { tclk_sync_reset[0], tclk_async_reset[2] };
+    end        
+
     lowampa_trigger_wrapper #(
         .AGC_TIMESCALE_REDUCTION_BITS(2),
         .NBEAMS(NBEAMS),
@@ -130,6 +143,7 @@ module lowampa_design #(parameter NBEAMS=2, parameter AGC_TIMESCALE_REDUCTION_BI
         .aclk_phase_i(aclk_phase_i),
         
         .tclk(aclk),
+        .tclk_resetn(!tclk_sync_reset[1]),
         .dat_i(repacked_data),
         .debug_envelope(debug_envelope),
         
